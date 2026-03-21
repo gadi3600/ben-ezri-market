@@ -45,6 +45,7 @@ export interface ListItem {
   unit: string
   note: string | null
   is_checked: boolean
+  is_deferred: boolean
   sort_order: number
   added_by: string | null
   checked_by: string | null
