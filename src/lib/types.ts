@@ -53,3 +53,23 @@ export interface ListItem {
   created_at: string
   updated_at: string
 }
+
+export interface Purchase {
+  id: string
+  family_id: string
+  store_id: string | null
+  list_id: string | null
+  total_amount: number | null
+  purchased_by: string | null
+  purchased_at: string
+  created_at: string
+}
+
+export interface PurchaseReceipt {
+  id: string
+  purchase_id: string
+  storage_path: string
+  page_number: number
+  uploaded_by: string | null
+  created_at: string
+}

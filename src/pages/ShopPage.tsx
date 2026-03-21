@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
+import ReceiptModal from '../components/ReceiptModal'
 
 // ── Store visual config ───────────────────────────────────────────────────────
 
@@ -55,7 +56,6 @@ function StorePickerModal({
       if (error) throw error
       if (data) await handleSelect(data)
     } catch {
-      // fallback: create local store object for this session
       await onSelect({ id: '', name: newName.trim(), logo_url: null, website: null, is_active: true, created_at: '' })
     } finally {
       setSaving(false)
@@ -64,18 +64,14 @@ function StorePickerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onSkip} />
 
-      {/* Sheet */}
       <div className="relative bg-white rounded-t-3xl shadow-2xl max-h-[88vh] overflow-y-auto">
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
 
         <div className="px-5 pb-8">
-          {/* Header */}
           <div className="flex items-center justify-between mb-5 mt-2">
             <div>
               <h2 className="text-xl font-extrabold text-gray-800">באיזו חנות אתה קונה?</h2>
@@ -89,7 +85,6 @@ function StorePickerModal({
             </button>
           </div>
 
-          {/* Store grid */}
           <div className="grid grid-cols-2 gap-3 mb-4">
             {stores.map(store => {
               const v = storeVisual(store.name)
@@ -119,7 +114,6 @@ function StorePickerModal({
             })}
           </div>
 
-          {/* Add new store */}
           {!showAdd ? (
             <button
               onClick={() => { setShowAdd(true); setTimeout(() => inputRef.current?.focus(), 100) }}
@@ -157,7 +151,6 @@ function StorePickerModal({
             </div>
           )}
 
-          {/* Skip */}
           <button
             onClick={onSkip}
             className="w-full mt-3 py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors font-medium"
@@ -192,18 +185,7 @@ function ActiveItem({
         )}
       </div>
 
-      {/* → להמשך */}
-      <button
-        onClick={() => onDefer(item)}
-        className="flex items-center gap-1 px-3 py-2.5 rounded-xl
-                   bg-gray-100 hover:bg-gray-200 active:bg-gray-300
-                   transition-colors text-gray-500 text-xs font-semibold flex-shrink-0 min-h-[40px]"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>להמשך</span>
-      </button>
-
-      {/* ✓ לעגלה */}
+      {/* ✓ לעגלה — מימין (first button = rightmost in RTL) */}
       <button
         onClick={() => onCheck(item)}
         className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl
@@ -212,6 +194,17 @@ function ActiveItem({
       >
         <CheckCircle2 className="w-4 h-4" />
         <span>לעגלה</span>
+      </button>
+
+      {/* → להמשך — משמאל (second button = leftmost in RTL) */}
+      <button
+        onClick={() => onDefer(item)}
+        className="flex items-center gap-1 px-3 py-2.5 rounded-xl
+                   bg-gray-100 hover:bg-gray-200 active:bg-gray-300
+                   transition-colors text-gray-500 text-xs font-semibold flex-shrink-0 min-h-[40px]"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>להמשך</span>
       </button>
     </div>
   )
@@ -274,7 +267,11 @@ export default function ShopPage() {
   const [showChecked, setShowChecked] = useState(false)
   const [showDeferred, setShowDeferred] = useState(true)
   const [doneState, setDoneState]     = useState<DoneState>('idle')
-  const [deferredCount, setDeferredCount] = useState(0) // for complete screen
+  const [deferredCount, setDeferredCount] = useState(0)
+
+  // receipt modal
+  const [completedPurchaseId, setCompletedPurchaseId] = useState<string | null>(null)
+  const [showReceiptModal, setShowReceiptModal]       = useState(false)
 
   // ── load ──
   useEffect(() => {
@@ -299,7 +296,6 @@ export default function ShopPage() {
   async function loadAll() {
     setLoading(true)
 
-    // Load stores + list in parallel
     const [{ data: storeData }, { data: listData }] = await Promise.all([
       supabase.from('stores').select('*').eq('is_active', true).order('name'),
       supabase
@@ -321,7 +317,6 @@ export default function ShopPage() {
         .order('sort_order', { ascending: true })
       setItems(itemData ?? [])
 
-      // Resolve selected store
       if (listData.store_id) {
         const found = storeData?.find(s => s.id === listData.store_id)
         if (found) setSelectedStore(found)
@@ -394,14 +389,22 @@ export default function ShopPage() {
       completed_at: new Date().toISOString(),
     }).eq('id', list.id)
 
-    // 2. Save purchase record
-    await supabase.from('purchases').insert({
-      family_id:    profile.family_id,
-      store_id:     selectedStore?.id ?? null,
-      list_id:      list.id,
-      purchased_by: profile.id,
-      purchased_at: new Date().toISOString(),
-    })
+    // 2. Save purchase record — capture ID
+    const { data: purchaseData } = await supabase
+      .from('purchases')
+      .insert({
+        family_id:    profile.family_id,
+        store_id:     selectedStore?.id ?? null,
+        list_id:      list.id,
+        purchased_by: profile.id,
+        purchased_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (purchaseData?.id) {
+      setCompletedPurchaseId(purchaseData.id)
+    }
 
     // 3. Move deferred items to new list
     if (deferred.length > 0) {
@@ -429,12 +432,19 @@ export default function ShopPage() {
           })),
         )
       }
+    }
+
+    setCompleting(false)
+    setShowReceiptModal(true) // Show receipt modal before done screen
+  }
+
+  function handleReceiptClose() {
+    setShowReceiptModal(false)
+    if (deferredCount > 0) {
       setDoneState('continue')
     } else {
       setDoneState('complete')
     }
-
-    setCompleting(false)
   }
 
   // ── derived state ──
@@ -513,12 +523,21 @@ export default function ShopPage() {
         />
       )}
 
+      {/* ── Receipt Modal (shown after completing) ── */}
+      {showReceiptModal && completedPurchaseId && (
+        <ReceiptModal
+          purchaseId={completedPurchaseId}
+          storeName={selectedStore?.name}
+          celebrationMode={true}
+          onClose={handleReceiptClose}
+        />
+      )}
+
       <div className="pb-6 space-y-3">
 
         {/* ── Header: store badge + progress ── */}
         <div className={`rounded-2xl p-4 transition-all ${allDone ? 'bg-primary-600' : 'bg-primary-50 border border-primary-100'}`}>
 
-          {/* Store badge */}
           <div className="flex items-center justify-between mb-3">
             {selectedStore ? (
               <button
@@ -554,7 +573,6 @@ export default function ShopPage() {
             />
           </div>
 
-          {/* Counts */}
           <div className={`flex gap-4 mt-2 text-xs font-medium ${allDone ? 'text-primary-100' : 'text-primary-500'}`}>
             <span>✓ {checked.length} בעגלה</span>
             {deferred.length > 0 && <span>→ {deferred.length} להמשך</span>}
@@ -619,7 +637,7 @@ export default function ShopPage() {
         {allDone && (
           <button
             onClick={completeShop}
-            disabled={completing}
+            disabled={completing || !!completedPurchaseId}
             className="btn-primary w-full text-base py-4 shadow-lg shadow-primary-200"
           >
             <Trophy className="w-5 h-5" />
@@ -631,7 +649,7 @@ export default function ShopPage() {
           </button>
         )}
 
-        {/* ══ להמשך — collapsible bottom section ══ */}
+        {/* ── Deferred — collapsible bottom section ── */}
         <div className="rounded-2xl overflow-hidden border-2 border-dashed border-gray-200">
           <button
             onClick={() => setShowDeferred(v => !v)}
