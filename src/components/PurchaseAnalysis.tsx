@@ -398,9 +398,8 @@ export default function PurchaseAnalysis({
           </p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* pb-24 — leaves room for fixed bottom nav */}
-          <div className="px-4 py-4 space-y-4 pb-32 max-w-2xl mx-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-40">
+          <div className="px-4 py-4 space-y-4 pb-40 max-w-2xl mx-auto">
 
             {/* ── Stats ── */}
             <div className="grid grid-cols-4 gap-2">
