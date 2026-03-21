@@ -53,41 +53,61 @@ const CAT: Record<string, Category> = {
 
 const OTHER: Category = { id: 'other', label: 'אחר', emoji: '📦', color: '#94a3b8' }
 
-// Rules: ordered by classification priority (most specific first)
+// Rules: ordered by priority — disposable BEFORE drinks so "כוסות" always → disposable
 const RULES: Array<[Category, string[]]> = [
-  [CAT.frozen,     ['גלידה', 'קפוא']],
-  [CAT.meat,       ['עוף', 'בשר', 'דג', 'סלמון', 'טונה', 'נקניק', 'שניצל', 'המבורגר', 'פרגית', 'חזה עוף', 'כבד', 'קציצ', 'פילה', 'שוק']],
-  [CAT.produce,    ['עגבניה', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז', 'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא', 'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון', 'אגס', 'ירק', 'פרי']],
-  [CAT.dairy,      ['חלב', 'גבינה', 'יוגורט', 'ביצ', 'קוטג', 'שמנת', 'חמאה', 'לבן']],
-  [CAT.cleaning,   ['סבון', 'שמפו', 'ניקוי', 'אבקת כביסה', 'נוזל כלים', 'דאודורנט', 'משחת שיניים', 'נייר טואלט', 'קרם']],
-  [CAT.drinks,     ['מים', 'מיץ', 'קולה', 'ספרייט', 'בירה', 'יין', 'סודה', 'משקה', 'כוסות']],
-  [CAT.disposable, ['שקית', 'ניילון', 'אלומיניום', 'רדיד', 'מגבונים', 'מפיות']],
-  [CAT.dry,        ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'לחם', 'שימורים', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'תבלין', 'פיתה', 'חומוס', 'עדשים']],
-  [CAT.snacks,     ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'וופל']],
+  [CAT.disposable, [
+    'כוסות', 'צלחות', 'קערות', 'סכו', 'מגש', 'שקית', 'ניילון',
+    'אלומיניום', 'רדיד', 'מפיות', 'מפית',
+  ]],
+  [CAT.cleaning, [
+    'שמפו', 'סבון', 'קרם', 'דאודורנט', 'ניקוי', 'אבקת',
+    'נוזל כלים', 'נוזל לכלים', 'נייר טואלט', 'מגבון', 'טמפון', 'פד',
+    'גליל', 'מרכך',
+  ]],
+  [CAT.dairy, [
+    'חלב', 'גבינה', 'יוגורט', 'ביצ', 'קוטג', 'שמנת', 'חמאה',
+    'לבן', 'מחלבות', 'תחליב',
+  ]],
+  [CAT.meat, [
+    'עוף', 'בשר', 'דג', 'סלמון', 'טונה', 'נקניק', 'שניצל',
+    'המבורגר', 'פרגית', 'חזה', 'כבד', 'קציצ', 'פילה', 'שוק',
+  ]],
+  [CAT.produce, [
+    'עגבניה', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז',
+    'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא',
+    'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון',
+    'פטריות', 'כוסברה', 'פטרוז',
+  ]],
+  [CAT.drinks, [
+    'מים', 'מיץ', 'קולה', 'ספרייט', 'פאנטה', 'בירה', 'יין',
+    'סודה', 'לימונדה', 'נקטר', 'משקה', 'רד בול',
+  ]],
+  [CAT.dry, [
+    'אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'לחם', 'פיתה',
+    'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'שימורי', 'עדשים',
+    'שעועית', 'חומוס', 'פתיתים', 'קורנפלקס', 'תירס', 'מרק',
+  ]],
+  [CAT.frozen,  ['גלידה', 'קפוא']],
+  [CAT.snacks,  ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'דניאלה']],
 ]
 
-// Priority-based classifier:
-//   1. Special rules (פיקדון, חד פעמי)
-//   2. Prefix match across all categories (in rule order)
-//   3. Substring match across all categories (in rule order)
+// Priority classifier:
+//   1. Special: פיקדון (deposit) — alone=other, with word=drinks
+//   2. Special: חד פעמי anywhere → disposable (catches unlisted items)
+//   3. Pass 1: prefix match in RULES order (disposable before drinks)
+//   4. Pass 2: substring match in RULES order
 function classifyItem(name: string): Category {
   const lower = name.trim().toLowerCase()
 
-  // "פיקדון" alone → other; with another word → drinks
-  if (/^פיקדון$/.test(lower))    return OTHER
+  if (/^פיקדון$/.test(lower))   return OTHER
   if (lower.includes('פיקדון')) return CAT.drinks
-
-  // "חד פעמי" anywhere → disposable (overrides "כוסות" → drinks)
   if (lower.includes('חד פעמי')) return CAT.disposable
 
-  // Pass 1: prefix match (name starts with keyword)
   for (const [cat, keywords] of RULES) {
     for (const kw of keywords) {
       if (lower.startsWith(kw)) return cat
     }
   }
-
-  // Pass 2: substring match
   for (const [cat, keywords] of RULES) {
     for (const kw of keywords) {
       if (lower.includes(kw)) return cat
@@ -147,7 +167,7 @@ function DonutChart({
 
   return (
     <div
-      className="relative w-[120px] h-[120px] mx-auto rounded-full cursor-pointer"
+      className="relative w-[160px] h-[160px] mx-auto rounded-full cursor-pointer"
       style={{ background: gradient }}
       onClick={() => onSelect(null)}
       title="לחץ לאיפוס הסינון"
@@ -155,7 +175,7 @@ function DonutChart({
       {/* Donut hole — inset 28px gives ~64px inner circle on a 120px chart */}
       <div
         className="absolute rounded-full bg-white flex flex-col items-center justify-center"
-        style={{ inset: '28px' }}
+        style={{ inset: '38px' }}
       >
         <span className="text-lg leading-none select-none">
           {selected ? selected.category.emoji : '🛒'}
@@ -380,7 +400,7 @@ export default function PurchaseAnalysis({
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
           {/* pb-24 — leaves room for fixed bottom nav */}
-          <div className="px-4 py-4 space-y-4 pb-24 max-w-2xl mx-auto">
+          <div className="px-4 py-4 space-y-4 pb-32 max-w-2xl mx-auto">
 
             {/* ── Stats ── */}
             <div className="grid grid-cols-4 gap-2">
@@ -433,9 +453,9 @@ export default function PurchaseAnalysis({
                   חלוקה לקטגוריות
                 </p>
 
-                <div className="flex gap-4 items-start">
+                <div className="flex flex-col gap-4">
                   {/* Donut */}
-                  <div className="flex-shrink-0 w-[120px]">
+                  <div className="max-w-[180px] mx-auto w-full">
                     <DonutChart
                       slices={pieSlices}
                       selectedCat={selectedCat}
@@ -453,7 +473,7 @@ export default function PurchaseAnalysis({
                   </div>
 
                   {/* Legend */}
-                  <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="space-y-1.5">
                     {pieSlices.map(slice => {
                       const isSel = selectedCat === slice.category.id
                       return (
