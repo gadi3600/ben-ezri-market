@@ -55,7 +55,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 512,
+        max_tokens: 2048,
         messages: [
           {
             role: "user",
@@ -63,7 +63,7 @@ serve(async (req) => {
               ...imageContent,
               {
                 type: "text",
-                text: 'ניתח את החשבונית. החזר JSON בלבד (ללא markdown) בפורמט: {"total": מספר_או_null, "store": "שם_או_null", "date": "DD/MM/YYYY_או_null", "items_count": מספר_או_null}',
+                text: 'ניתח את החשבונית. החזר JSON בלבד (ללא markdown) בפורמט המדויק:\n{"total": מספר_או_null, "store": "שם_חנות_או_null", "date": "DD/MM/YYYY_או_null", "items": [{"name": "שם מוצר", "quantity": מספר, "unit": "יחידה", "price_per_unit": מספר_או_null, "total_price": מספר_או_null}]}\nunit יכול להיות: יחידה, ק"ג, ליטר, מ"ל, גרם. אם אין פריטים ברורים — items: []',
               },
             ],
           },

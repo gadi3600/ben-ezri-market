@@ -18,11 +18,19 @@ async function fileHash(file: File): Promise<string> {
 
 type Step = 'choose' | 'manual' | 'uploading' | 'analyzing' | 'result'
 
+interface ReceiptItem {
+  name: string
+  quantity: number
+  unit: string
+  price_per_unit: number | null
+  total_price: number | null
+}
+
 interface AnalysisResult {
   total: number | null
   store: string | null
   date: string | null
-  items_count: number | null
+  items: ReceiptItem[]
 }
 
 interface Props {
@@ -145,6 +153,21 @@ export default function ReceiptModal({
           if (!('error' in result)) {
             setAnalysis(result)
             if (result.total) setConfirmedAmount(String(result.total))
+
+            // Save extracted items to purchase_items (replace any existing)
+            if (result.items?.length > 0) {
+              await supabase.from('purchase_items').delete().eq('purchase_id', purchaseId)
+              await supabase.from('purchase_items').insert(
+                result.items.map(item => ({
+                  purchase_id:    purchaseId,
+                  name:           item.name,
+                  quantity:       item.quantity ?? 1,
+                  unit:           item.unit ?? 'יחידה',
+                  price_per_unit: item.price_per_unit ?? null,
+                  total_price:    item.total_price ?? null,
+                })),
+              )
+            }
           }
         }
       }
@@ -350,7 +373,7 @@ export default function ReceiptModal({
                 </p>
               )}
 
-              {analysis && (analysis.store || analysis.date || analysis.items_count) ? (
+              {analysis && (analysis.store || analysis.date || analysis.items?.length) ? (
                 <div className="card-green">
                   <p className="text-xs font-bold text-primary-600 uppercase tracking-wide mb-3">
                     תוצאות AI
@@ -368,10 +391,10 @@ export default function ReceiptModal({
                         <span className="text-primary-400 text-xs">תאריך</span>
                       </div>
                     )}
-                    {analysis.items_count && (
+                    {analysis.items?.length > 0 && (
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-semibold text-primary-800">{analysis.items_count} פריטים</span>
-                        <span className="text-primary-400 text-xs">כמות</span>
+                        <span className="font-semibold text-primary-800">{analysis.items.length} פריטים</span>
+                        <span className="text-primary-400 text-xs">זוהו ונשמרו</span>
                       </div>
                     )}
                   </div>
