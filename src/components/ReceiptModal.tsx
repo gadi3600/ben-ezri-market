@@ -145,7 +145,7 @@ export default function ReceiptModal({
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             },
-            body: JSON.stringify({ imageUrls }),
+            body: JSON.stringify({ imageUrls, purchaseId }),
           },
         )
         if (fnRes.ok) {
@@ -153,21 +153,7 @@ export default function ReceiptModal({
           if (!('error' in result)) {
             setAnalysis(result)
             if (result.total) setConfirmedAmount(String(result.total))
-
-            // Save extracted items to purchase_items (replace any existing)
-            if (result.items?.length > 0) {
-              await supabase.from('purchase_items').delete().eq('purchase_id', purchaseId)
-              await supabase.from('purchase_items').insert(
-                result.items.map(item => ({
-                  purchase_id:    purchaseId,
-                  name:           item.name,
-                  quantity:       item.quantity ?? 1,
-                  unit:           item.unit ?? 'יחידה',
-                  price_per_unit: item.price_per_unit ?? null,
-                  total_price:    item.total_price ?? null,
-                })),
-              )
-            }
+            // Items are saved inside the Edge Function using service role key
           }
         }
       }

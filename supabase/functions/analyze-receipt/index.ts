@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -24,14 +25,16 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrls } = await req.json() as { imageUrls: string[] }
+    const { imageUrls, purchaseId } = await req.json() as {
+      imageUrls: string[]
+      purchaseId?: string
+    }
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY")
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set")
+    if (!apiKey)          throw new Error("ANTHROPIC_API_KEY not set")
     if (!imageUrls?.length) throw new Error("imageUrls is empty")
 
     // Fetch each signed URL and convert to base64
-    // (Claude cannot reliably fetch private Supabase signed URLs directly)
     const imageContent = await Promise.all(
       imageUrls.map(async (url) => {
         const res = await fetch(url)
@@ -81,7 +84,50 @@ serve(async (req) => {
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) throw new Error(`No JSON in Claude response: ${text}`)
 
-    return new Response(JSON.stringify(JSON.parse(match[0])), {
+    const result = JSON.parse(match[0]) as {
+      total: number | null
+      store: string | null
+      date: string | null
+      items: Array<{
+        name: string
+        quantity: number
+        unit: string
+        price_per_unit: number | null
+        total_price: number | null
+      }>
+    }
+
+    // ── Save items to purchase_items using service role (bypasses RLS) ──────────
+    if (purchaseId && result.items?.length > 0) {
+      const supabaseUrl      = Deno.env.get("SUPABASE_URL")
+      const serviceRoleKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+
+      if (supabaseUrl && serviceRoleKey) {
+        const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+        // Replace any existing items for this purchase
+        await supabase.from("purchase_items").delete().eq("purchase_id", purchaseId)
+
+        const { error: insertErr } = await supabase.from("purchase_items").insert(
+          result.items.map(item => ({
+            purchase_id:    purchaseId,
+            name:           item.name,
+            quantity:       Number(item.quantity) || 1,
+            unit:           item.unit || "יחידה",
+            price_per_unit: item.price_per_unit ?? null,
+            total_price:    item.total_price ?? null,
+          })),
+        )
+
+        if (insertErr) {
+          console.error("[analyze-receipt] purchase_items insert failed:", insertErr.message)
+        } else {
+          console.log(`[analyze-receipt] saved ${result.items.length} items for purchase ${purchaseId}`)
+        }
+      }
+    }
+
+    return new Response(JSON.stringify(result), {
       headers: { ...CORS, "Content-Type": "application/json" },
     })
   } catch (err) {
