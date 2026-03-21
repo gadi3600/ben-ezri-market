@@ -129,14 +129,22 @@ export default function ReceiptModal({
       const imageUrls = (signed ?? []).map(s => s.signedUrl).filter(Boolean)
 
       if (imageUrls.length > 0) {
-        const { data: result, error: fnErr } = await supabase.functions.invoke(
-          'analyze-receipt',
-          { body: { imageUrls } },
+        const fnRes = await fetch(
+          'https://lbeivhmaesgissghtzzh.supabase.co/functions/v1/analyze-receipt',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({ imageUrls }),
+          },
         )
-        if (!fnErr && result && !result.error) {
-          setAnalysis(result as AnalysisResult)
-          if ((result as AnalysisResult).total) {
-            setConfirmedAmount(String((result as AnalysisResult).total))
+        if (fnRes.ok) {
+          const result = await fnRes.json() as AnalysisResult
+          if (!('error' in result)) {
+            setAnalysis(result)
+            if (result.total) setConfirmedAmount(String(result.total))
           }
         }
       }
