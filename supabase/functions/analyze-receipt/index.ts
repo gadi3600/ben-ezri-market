@@ -86,8 +86,12 @@ serve(async (req) => {
       }),
     )
 
+    const controller = new AbortController()
+    const timeoutId  = setTimeout(() => controller.abort(), 30_000)
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -95,7 +99,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
+        max_tokens: 4096,
         messages: [
           {
             role: "user",
@@ -103,12 +107,11 @@ serve(async (req) => {
               ...imageContent,
               {
                 type: "text",
-                // Prompt in English to reduce instruction/data confusion.
-                // Units: avoid abbreviations with " (e.g. use קג not ק"ג).
-                text: `Analyze this receipt image. Return ONLY a valid JSON object — no markdown, no text before or after.
+                text: `Analyze this receipt image. Return ONLY valid JSON — no markdown, no backticks, no text before or after the JSON object.
 Schema:
 {"total": <number|null>, "store": "<store name|null>", "date": "<DD/MM/YYYY|null>", "items": [{"name": "<product name>", "quantity": <number>, "unit": "<unit>", "price_per_unit": <number|null>, "total_price": <number|null>}]}
 Rules:
+- Output must be a single complete JSON object. Do NOT truncate the items array.
 - Use standard ASCII double-quotes only. Never use " as part of a Hebrew word inside a string.
 - For units use only: יחידה, קג, ליטר, מל, גרם, יח (no abbreviations with quotes).
 - Product names in Hebrew as they appear on the receipt.
@@ -119,6 +122,7 @@ Rules:
         ],
       }),
     })
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const body = await response.text()
