@@ -30,98 +30,71 @@ interface Props {
   onClose: () => void
 }
 
-// ── Category definitions ──────────────────────────────────────────────────────
+// ── Category ──────────────────────────────────────────────────────────────────
 
 interface Category {
   id: string
   label: string
   emoji: string
   color: string
-  keywords: string[]
 }
 
-const CATEGORIES: Category[] = [
-  {
-    id: 'cleaning',
-    label: 'ניקוי וטואלטיקה',
-    emoji: '🧹',
-    color: '#06b6d4',
-    keywords: ['סבון','שמפו','ניקוי','אבקת','נוזל','מרכך','ניחוח','דאודורנט','קרם','משחת שיניים','מברשת','טואלט','נייר טואלט','מגבת','ספוג','פיירי','ג\'ל','לכה','טמפקס','פד','שינוי','לק','מניקור','גילוח','ראש','גוף','קרם גוף'],
-  },
-  {
-    id: 'dairy',
-    label: 'מקרר, חלב וביצים',
-    emoji: '🥛',
-    color: '#3b82f6',
-    keywords: ['חלב','גבינה','יוגורט','ביצ','קוטג','שמנת','חמאה','מוצרלה','פטה','עמק','תנובה','ריקוטה','לבן','דנונה','מחלבות','קפיר','ביצים'],
-  },
-  {
-    id: 'meat',
-    label: 'בשר ודגים',
-    emoji: '🥩',
-    color: '#ef4444',
-    keywords: ['עוף','בשר','בקר','טלה','דג','סלמון','טונה','נקניק','שניצל','המבורגר','כבד','פרגית','חזה','שוק','כנף','בשר טחון','פילה','דניס','לברק','סרדין','קרפיון','קציצ'],
-  },
-  {
-    id: 'produce',
-    label: 'ירקות ופירות',
-    emoji: '🥦',
-    color: '#22c55e',
-    keywords: ['עגב','מלפפון','חסה','גזר','בצל','תפוח','תפוז','בנ','אבוקד','לימון','אבטיח','ענב','פלפל','ברוקול','כרובית','קישוא','חצילים','תרד','שום','פטרוז','כוסב','נענע','בזיל','מנגו','אנ','תות','מלון','אגס','שז','דובדב','רמון','פסיפלורה','פיקוס','ירק','פרי','תפוחי','תפוחים'],
-  },
-  {
-    id: 'dry',
-    label: 'מזווה ויבש',
-    emoji: '🌾',
-    color: '#f59e0b',
-    keywords: ['אורז','פסטה','קמח','סוכר','שמן','מלח','פלפל שחור','תבלין','עדש','שעועית','חומוס','קטניות','לחם','פיתה','קרקר','ביסקוויט','שוקולד','קפה','תה','קנולה','זית','חומץ','רסק','פסטו','שימורי','טונה שימורים','פת','דגנים','גרנולה','שיבולת','קוואקר','דגנ','ממרח','טחינה','חלווה','ריבה','דבש','סירופ','וניל','אבקת','אפייה','שמרים','קוקוס'],
-  },
-  {
-    id: 'drinks',
-    label: 'שתייה',
-    emoji: '🥤',
-    color: '#8b5cf6',
-    keywords: ['מים','מיץ','קולה','ספרייט','פאנטה','בירה','יין','וודקה','סודה','אייס טי','נקטר','ענבים','תפוזים שתייה','משקה','לימונדה','שייק','אנרגיה','רד בול','פוקוס','נביעות','עדן'],
-  },
-  {
-    id: 'disposable',
-    label: 'חד פעמי',
-    emoji: '🥡',
-    color: '#f97316',
-    keywords: ['כוסות','צלחות','קערות','סכו"ם','כפית','מזלג','סכין','שקית','ניילון','אלומיניום','רדיד','נייר אפייה','כוס חד','צלחת חד','קופסא','מגש','מפיות','מגבונים'],
-  },
-  {
-    id: 'snacks',
-    label: 'חטיפים וממתקים',
-    emoji: '🍿',
-    color: '#ec4899',
-    keywords: ['חטיף','במבה','ביסלי','פופקורן','שוקולד','סוכריות','גומי','וופל','עוגיות','עוגה','פאי','טבעול','פרינגלס','לייס','דוריטוס','אלפינו','קינדר','מארז','מתוק'],
-  },
-  {
-    id: 'frozen',
-    label: 'קפוא ומוכן',
-    emoji: '🧊',
-    color: '#67e8f9',
-    keywords: ['קפוא','גלידה','שטרודל','פשטידה','לחמנייה קפ','פיצה','ניוקי','אפון קפ','תירס קפ','שניצל קפ','בורגר קפ'],
-  },
+const CAT: Record<string, Category> = {
+  frozen:     { id: 'frozen',     label: 'קפוא ומוכן',        emoji: '🧊', color: '#67e8f9' },
+  meat:       { id: 'meat',       label: 'בשר ודגים',         emoji: '🥩', color: '#ef4444' },
+  produce:    { id: 'produce',    label: 'ירקות ופירות',      emoji: '🥦', color: '#22c55e' },
+  dairy:      { id: 'dairy',      label: 'מקרר, חלב וביצים',  emoji: '🥛', color: '#3b82f6' },
+  cleaning:   { id: 'cleaning',   label: 'ניקוי וטואלטיקה',   emoji: '🧹', color: '#06b6d4' },
+  drinks:     { id: 'drinks',     label: 'שתייה',             emoji: '🥤', color: '#8b5cf6' },
+  disposable: { id: 'disposable', label: 'חד פעמי',           emoji: '🥡', color: '#f97316' },
+  dry:        { id: 'dry',        label: 'מזווה ויבש',         emoji: '🌾', color: '#f59e0b' },
+  snacks:     { id: 'snacks',     label: 'חטיפים וממתקים',    emoji: '🍿', color: '#ec4899' },
+}
+
+const OTHER: Category = { id: 'other', label: 'אחר', emoji: '📦', color: '#94a3b8' }
+
+// Rules: ordered by classification priority (most specific first)
+const RULES: Array<[Category, string[]]> = [
+  [CAT.frozen,     ['גלידה', 'קפוא']],
+  [CAT.meat,       ['עוף', 'בשר', 'דג', 'סלמון', 'טונה', 'נקניק', 'שניצל', 'המבורגר', 'פרגית', 'חזה עוף', 'כבד', 'קציצ', 'פילה', 'שוק']],
+  [CAT.produce,    ['עגבניה', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז', 'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא', 'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון', 'אגס', 'ירק', 'פרי']],
+  [CAT.dairy,      ['חלב', 'גבינה', 'יוגורט', 'ביצ', 'קוטג', 'שמנת', 'חמאה', 'לבן']],
+  [CAT.cleaning,   ['סבון', 'שמפו', 'ניקוי', 'אבקת כביסה', 'נוזל כלים', 'דאודורנט', 'משחת שיניים', 'נייר טואלט', 'קרם']],
+  [CAT.drinks,     ['מים', 'מיץ', 'קולה', 'ספרייט', 'בירה', 'יין', 'סודה', 'משקה', 'כוסות']],
+  [CAT.disposable, ['שקית', 'ניילון', 'אלומיניום', 'רדיד', 'מגבונים', 'מפיות']],
+  [CAT.dry,        ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'לחם', 'שימורים', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'תבלין', 'פיתה', 'חומוס', 'עדשים']],
+  [CAT.snacks,     ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'וופל']],
 ]
 
-const OTHER_CATEGORY: Category = {
-  id: 'other',
-  label: 'אחר',
-  emoji: '📦',
-  color: '#94a3b8',
-  keywords: [],
-}
-
+// Priority-based classifier:
+//   1. Special rules (פיקדון, חד פעמי)
+//   2. Prefix match across all categories (in rule order)
+//   3. Substring match across all categories (in rule order)
 function classifyItem(name: string): Category {
-  const lower = name.toLowerCase()
-  for (const cat of CATEGORIES) {
-    for (const kw of cat.keywords) {
-      if (lower.includes(kw.toLowerCase())) return cat
+  const lower = name.trim().toLowerCase()
+
+  // "פיקדון" alone → other; with another word → drinks
+  if (/^פיקדון$/.test(lower))    return OTHER
+  if (lower.includes('פיקדון')) return CAT.drinks
+
+  // "חד פעמי" anywhere → disposable (overrides "כוסות" → drinks)
+  if (lower.includes('חד פעמי')) return CAT.disposable
+
+  // Pass 1: prefix match (name starts with keyword)
+  for (const [cat, keywords] of RULES) {
+    for (const kw of keywords) {
+      if (lower.startsWith(kw)) return cat
     }
   }
-  return OTHER_CATEGORY
+
+  // Pass 2: substring match
+  for (const [cat, keywords] of RULES) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return cat
+    }
+  }
+
+  return OTHER
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -136,17 +109,19 @@ function fmtQty(q: number, unit: string) {
   return unit === 'יחידה' ? String(n) : `${n} ${unit}`
 }
 
-// ── Simple SVG Pie Chart ──────────────────────────────────────────────────────
+// ── Pie slice type (no SVG angles needed) ─────────────────────────────────────
 
 interface PieSlice {
   category: Category
   total: number
   percent: number
-  startAngle: number
-  endAngle: number
 }
 
-function PieChart({
+// ── CSS conic-gradient Donut Chart ────────────────────────────────────────────
+// Uses CSS conic-gradient — works reliably on all mobile browsers.
+// Clicking the legend toggles selection; clicking the chart deselects.
+
+function DonutChart({
   slices,
   selectedCat,
   onSelect,
@@ -155,68 +130,41 @@ function PieChart({
   selectedCat: string | null
   onSelect: (id: string | null) => void
 }) {
-  const size = 200
-  const cx = size / 2
-  const cy = size / 2
-  const r = 80
-  const innerR = 48
+  // Build gradient stops
+  let acc = 0
+  const stops = slices.map(s => {
+    const from = acc
+    acc += s.percent
+    // If a category is selected, dim non-selected slices
+    const color = selectedCat && selectedCat !== s.category.id
+      ? `${s.category.color}55`  // ~33% opacity via hex alpha
+      : s.category.color
+    return `${color} ${from.toFixed(3)}% ${acc.toFixed(3)}%`
+  })
 
-  function polarToXY(angle: number, radius: number) {
-    const rad = (angle - 90) * (Math.PI / 180)
-    return {
-      x: cx + radius * Math.cos(rad),
-      y: cy + radius * Math.sin(rad),
-    }
-  }
-
-  function describeSlice(startAngle: number, endAngle: number, selected: boolean) {
-    const outerR = selected ? r + 8 : r
-    const start = polarToXY(startAngle, outerR)
-    const end   = polarToXY(endAngle, outerR)
-    const iStart = polarToXY(startAngle, innerR)
-    const iEnd   = polarToXY(endAngle, innerR)
-    const large  = endAngle - startAngle > 180 ? 1 : 0
-
-    return [
-      `M ${iStart.x} ${iStart.y}`,
-      `L ${start.x} ${start.y}`,
-      `A ${outerR} ${outerR} 0 ${large} 1 ${end.x} ${end.y}`,
-      `L ${iEnd.x} ${iEnd.y}`,
-      `A ${innerR} ${innerR} 0 ${large} 0 ${iStart.x} ${iStart.y}`,
-      'Z',
-    ].join(' ')
-  }
-
+  const gradient = `conic-gradient(from -90deg, ${stops.join(', ')})`
   const selected = slices.find(s => s.category.id === selectedCat)
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[200px]">
-      {slices.map(slice => {
-        const isSel = selectedCat === slice.category.id
-        return (
-          <path
-            key={slice.category.id}
-            d={describeSlice(slice.startAngle, slice.endAngle, isSel)}
-            fill={slice.category.color}
-            opacity={selectedCat && !isSel ? 0.35 : 1}
-            stroke="white"
-            strokeWidth={2}
-            style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-            onClick={() => onSelect(isSel ? null : slice.category.id)}
-          />
-        )
-      })}
-      {/* Center text */}
-      <text x={cx} y={cy - 7} textAnchor="middle" fontSize="11" fill="#64748b" fontWeight="600">
-        {selected ? selected.category.emoji : '🛒'}
-      </text>
-      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#94a3b8">
-        {selected ? selected.category.label.split(' ')[0] : 'כל'}
-      </text>
-      <text x={cx} y={cy + 20} textAnchor="middle" fontSize="10" fill="#1e293b" fontWeight="700">
-        {selected ? `${selected.percent.toFixed(0)}%` : 'הקנייה'}
-      </text>
-    </svg>
+    <div
+      className="relative w-[120px] h-[120px] mx-auto rounded-full cursor-pointer"
+      style={{ background: gradient }}
+      onClick={() => onSelect(null)}
+      title="לחץ לאיפוס הסינון"
+    >
+      {/* Donut hole — inset 28px gives ~64px inner circle on a 120px chart */}
+      <div
+        className="absolute rounded-full bg-white flex flex-col items-center justify-center"
+        style={{ inset: '28px' }}
+      >
+        <span className="text-lg leading-none select-none">
+          {selected ? selected.category.emoji : '🛒'}
+        </span>
+        <span className="text-[9px] text-gray-500 font-semibold mt-0.5 select-none">
+          {selected ? `${selected.percent.toFixed(0)}%` : 'כל הקנייה'}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -292,7 +240,6 @@ export default function PurchaseAnalysis({
     category: classifyItem(item.name),
   }))
 
-  // Build pie slices (only categories with items)
   const catTotals: Record<string, { category: Category; total: number }> = {}
   for (const item of itemsWithCat) {
     const id = item.category.id
@@ -305,21 +252,11 @@ export default function PurchaseAnalysis({
   const pieSlices: PieSlice[] = Object.values(catTotals)
     .filter(c => c.total > 0)
     .sort((a, b) => b.total - a.total)
-    .reduce<{ slices: PieSlice[]; angle: number }>(
-      (acc, c) => {
-        const percent = grandTotal > 0 ? (c.total / grandTotal) * 100 : 0
-        const sweep   = (percent / 100) * 360
-        const slice: PieSlice = {
-          category:   c.category,
-          total:      c.total,
-          percent,
-          startAngle: acc.angle,
-          endAngle:   acc.angle + sweep,
-        }
-        return { slices: [...acc.slices, slice], angle: acc.angle + sweep }
-      },
-      { slices: [], angle: 0 },
-    ).slices
+    .map(c => ({
+      category: c.category,
+      total:    c.total,
+      percent:  grandTotal > 0 ? (c.total / grandTotal) * 100 : 0,
+    }))
 
   // ── filtered + sorted items ─────────────────────────────────────────────────
 
@@ -442,9 +379,10 @@ export default function PurchaseAnalysis({
         </div>
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="px-4 py-4 space-y-4 pb-10 max-w-2xl mx-auto">
+          {/* pb-24 — leaves room for fixed bottom nav */}
+          <div className="px-4 py-4 space-y-4 pb-24 max-w-2xl mx-auto">
 
-            {/* ── Stats — now 4 cards with total ── */}
+            {/* ── Stats ── */}
             <div className="grid grid-cols-4 gap-2">
               <div className="card text-center py-3 px-1">
                 <p className="text-xl font-extrabold text-primary-600 leading-tight">
@@ -488,7 +426,7 @@ export default function PurchaseAnalysis({
               </div>
             )}
 
-            {/* ── Category Pie Chart ── */}
+            {/* ── Category Donut Chart ── */}
             {pieSlices.length > 0 && (
               <div className="card">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
@@ -496,9 +434,9 @@ export default function PurchaseAnalysis({
                 </p>
 
                 <div className="flex gap-4 items-start">
-                  {/* Pie */}
-                  <div className="flex-shrink-0 w-[130px]">
-                    <PieChart
+                  {/* Donut */}
+                  <div className="flex-shrink-0 w-[120px]">
+                    <DonutChart
                       slices={pieSlices}
                       selectedCat={selectedCat}
                       onSelect={setSelectedCat}
@@ -507,7 +445,7 @@ export default function PurchaseAnalysis({
                       <button
                         onClick={() => setSelectedCat(null)}
                         className="w-full text-center text-xs text-primary-500 hover:text-primary-700
-                                   font-semibold mt-1 transition-colors"
+                                   font-semibold mt-2 transition-colors"
                       >
                         הצג הכל
                       </button>
@@ -553,9 +491,7 @@ export default function PurchaseAnalysis({
 
                 {/* Selected category summary */}
                 {selectedSlice && (
-                  <div
-                    className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between"
-                  >
+                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                     <span className="text-sm font-bold text-gray-700">
                       {selectedSlice.category.emoji} {selectedSlice.category.label}
                     </span>
