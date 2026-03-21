@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
   Clock, Receipt, Plus, ChevronLeft, ChevronRight,
-  X, Trash2, CheckCircle2, Pencil,
+  X, Trash2, CheckCircle2, Pencil, BarChart3,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import ReceiptModal from '../components/ReceiptModal'
+import PurchaseAnalysis from '../components/PurchaseAnalysis'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -250,6 +251,7 @@ export default function HistoryPage() {
   const [addReceiptFor, setAddReceiptFor]       = useState<PurchaseRow | null>(null)
   const [lightboxReceipts, setLightboxReceipts] = useState<LightboxReceipt[] | null>(null)
   const [loadingReceipts, setLoadingReceipts]   = useState<string | null>(null)
+  const [analysisFor, setAnalysisFor]           = useState<PurchaseRow | null>(null)
 
   // Amount editing
   const [editingAmount, setEditingAmount] = useState<string | null>(null) // purchaseId
@@ -367,6 +369,16 @@ export default function HistoryPage() {
           storeName={addReceiptFor.stores?.name}
           celebrationMode={false}
           onClose={() => { setAddReceiptFor(null); loadHistory() }}
+        />
+      )}
+
+      {analysisFor && (
+        <PurchaseAnalysis
+          purchaseId={analysisFor.id}
+          storeName={analysisFor.stores?.name ?? null}
+          purchasedAt={analysisFor.purchased_at}
+          totalAmount={analysisFor.total_amount}
+          onClose={() => setAnalysisFor(null)}
         />
       )}
 
@@ -497,6 +509,17 @@ export default function HistoryPage() {
                   <span>הוסף חשבונית</span>
                 </button>
               )}
+
+              {/* Analysis button */}
+              <button
+                onClick={() => setAnalysisFor(purchase)}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 mt-0.5
+                           text-xs text-gray-400 hover:text-primary-500
+                           hover:bg-primary-50 rounded-xl transition-colors font-medium"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                תחקיר קנייה
+              </button>
             </div>
           )
         })}

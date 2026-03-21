@@ -404,6 +404,20 @@ export default function ShopPage() {
 
     if (purchaseData?.id) {
       setCompletedPurchaseId(purchaseData.id)
+
+      // Save checked items as purchase_items (for history analysis)
+      const checkedItems = items.filter(i => i.is_checked)
+      if (checkedItems.length > 0) {
+        await supabase.from('purchase_items').insert(
+          checkedItems.map(item => ({
+            purchase_id: purchaseData.id,
+            product_id:  item.product_id ?? null,
+            name:        item.name,
+            quantity:    item.quantity,
+            unit:        item.unit,
+          })),
+        )
+      }
     }
 
     // 3. Move deferred items to new list
