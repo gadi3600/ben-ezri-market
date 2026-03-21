@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Clock, Receipt, Plus, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react'
+import {
+  Clock, Receipt, Plus, ChevronLeft, ChevronRight,
+  X, Trash2, CheckCircle2, Pencil,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import ReceiptModal from '../components/ReceiptModal'
@@ -43,7 +46,7 @@ function storeVisual(name: string | null) {
   return STORE_VISUALS[name] ?? { emoji: '🏪', bg: 'bg-gray-50', text: 'text-gray-600' }
 }
 
-// ── Receipt Lightbox ──────────────────────────────────────────────────────────
+// ── ReceiptLightbox — gallery + fullscreen ────────────────────────────────────
 
 function ReceiptLightbox({
   receipts,
@@ -52,98 +55,183 @@ function ReceiptLightbox({
 }: {
   receipts: LightboxReceipt[]
   onClose: () => void
-  onDelete: (id: string) => Promise<void>
+  onDelete: (ids: string[]) => Promise<void>
 }) {
-  const [idx, setIdx]       = useState(0)
-  const [deleting, setDeleting] = useState(false)
+  const [mode, setMode]               = useState<'gallery' | 'fullscreen'>('gallery')
+  const [fsIdx, setFsIdx]             = useState(0)
+  const [selectMode, setSelectMode]   = useState(false)
+  const [selected, setSelected]       = useState<Set<string>>(new Set())
+  const [deleting, setDeleting]       = useState(false)
 
-  // Clamp idx when receipts shrink after a delete
+  // Keep fsIdx in bounds after deletions
   useEffect(() => {
-    if (receipts.length > 0 && idx >= receipts.length) {
-      setIdx(receipts.length - 1)
-    }
-  }, [receipts.length, idx])
+    if (receipts.length > 0 && fsIdx >= receipts.length) setFsIdx(receipts.length - 1)
+  }, [receipts.length, fsIdx])
 
-  const safeIdx = Math.min(idx, Math.max(0, receipts.length - 1))
+  const safeIdx = Math.min(fsIdx, Math.max(0, receipts.length - 1))
   const current = receipts[safeIdx]
   if (!current) return null
 
-  async function handleDelete() {
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function doDelete(ids: string[]) {
     setDeleting(true)
-    await onDelete(current.id)
+    await onDelete(ids)
+    setSelected(new Set())
     setDeleting(false)
   }
 
+  // ── Gallery ──────────────────────────────────────────────────────────────
+  if (mode === 'gallery') {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+        {/* Top bar */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 text-white">
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-white/10 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-semibold">{receipts.length} תמונות</span>
+          <button
+            onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }}
+            className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors ${
+              selectMode ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            {selectMode ? 'ביטול' : 'בחר'}
+          </button>
+        </div>
+
+        {/* Thumbnails grid */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3">
+          <div className="grid grid-cols-3 gap-2">
+            {receipts.map((r, i) => {
+              const isSel = selected.has(r.id)
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => {
+                    if (selectMode) {
+                      toggleSelect(r.id)
+                    } else {
+                      setFsIdx(i)
+                      setMode('fullscreen')
+                    }
+                  }}
+                  className="relative aspect-square rounded-xl overflow-hidden bg-white/10 active:scale-95 transition-transform"
+                >
+                  <img
+                    src={r.signedUrl}
+                    alt={`עמוד ${r.page_number}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {selectMode && (
+                    <div className={`absolute inset-0 rounded-xl transition-all ${
+                      isSel ? 'bg-primary-500/30 ring-2 ring-inset ring-primary-400' : 'bg-black/20'
+                    }`}>
+                      <div className={`absolute top-1.5 right-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        isSel ? 'bg-primary-500 border-primary-500' : 'bg-black/40 border-white/60'
+                      }`}>
+                        {isSel && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                      </div>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Bulk delete bar */}
+        {selectMode && selected.size > 0 && (
+          <div className="flex-shrink-0 p-4 bg-black/40">
+            <button
+              onClick={() => doDelete([...selected])}
+              disabled={deleting}
+              className="w-full py-3 rounded-2xl bg-red-500 hover:bg-red-600
+                         text-white font-bold text-sm flex items-center justify-center gap-2
+                         disabled:opacity-60 transition-colors"
+            >
+              {deleting
+                ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <Trash2 className="w-4 h-4" />
+              }
+              מחק {selected.size} {selected.size === 1 ? 'תמונה' : 'תמונות'}
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col select-none">
       {/* Top bar */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 text-white">
         <button
-          onClick={onClose}
-          className="p-2 rounded-xl hover:bg-white/10 transition-colors"
+          onClick={() => setMode('gallery')}
+          className="flex items-center gap-1 px-2 py-2 rounded-xl hover:bg-white/10 text-sm transition-colors"
         >
-          <X className="w-5 h-5" />
+          <ChevronRight className="w-4 h-4" />
+          <span>גלריה</span>
         </button>
-
-        <div className="flex items-center gap-3">
-          {receipts.length > 1 && (
-            <span className="text-sm font-semibold">{safeIdx + 1} / {receipts.length}</span>
-          )}
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="p-2 rounded-xl hover:bg-red-500/20 text-red-400
-                       hover:text-red-300 disabled:opacity-40 transition-colors"
-            title="מחק תמונה זו"
-          >
-            {deleting
-              ? <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-              : <Trash2 className="w-5 h-5" />
-            }
-          </button>
-        </div>
+        {receipts.length > 1 && (
+          <span className="text-sm font-semibold">{safeIdx + 1} / {receipts.length}</span>
+        )}
+        <button
+          onClick={() => doDelete([current.id])}
+          disabled={deleting}
+          className="p-2 rounded-xl hover:bg-red-500/20 text-red-400
+                     hover:text-red-300 disabled:opacity-40 transition-colors"
+        >
+          {deleting
+            ? <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+            : <Trash2 className="w-5 h-5" />
+          }
+        </button>
       </div>
 
-      {/* Image — min-h-0 allows flex-1 to actually shrink so max-h-full works */}
+      {/* Image — key forces re-render on receipt change (fixes stale display) */}
       <div className="flex-1 min-h-0 flex items-center justify-center p-4">
         <img
+          key={current.id}
           src={current.signedUrl}
           alt={`עמוד ${current.page_number}`}
           className="max-w-full max-h-full object-contain rounded-xl"
         />
       </div>
 
-      {/* Navigation dots + arrows */}
+      {/* Navigation */}
       {receipts.length > 1 && (
         <div className="flex-shrink-0 flex justify-center items-center gap-4 pb-8">
           <button
-            onClick={() => setIdx(i => Math.max(0, i - 1))}
+            onClick={() => setFsIdx(i => Math.max(0, i - 1))}
             disabled={safeIdx === 0}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20
-                       disabled:opacity-30 text-white transition-colors"
+            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-
           <div className="flex items-center gap-2">
             {receipts.map((_, i) => (
               <button
                 key={i}
-                onClick={() => setIdx(i)}
+                onClick={() => setFsIdx(i)}
                 className={`rounded-full transition-all ${
-                  i === safeIdx
-                    ? 'w-3 h-3 bg-white'
-                    : 'w-2 h-2 bg-white/35 hover:bg-white/60'
+                  i === safeIdx ? 'w-3 h-3 bg-white' : 'w-2 h-2 bg-white/35 hover:bg-white/60'
                 }`}
               />
             ))}
           </div>
-
           <button
-            onClick={() => setIdx(i => Math.min(receipts.length - 1, i + 1))}
+            onClick={() => setFsIdx(i => Math.min(receipts.length - 1, i + 1))}
             disabled={safeIdx === receipts.length - 1}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20
-                       disabled:opacity-30 text-white transition-colors"
+            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -157,11 +245,15 @@ function ReceiptLightbox({
 
 export default function HistoryPage() {
   const { profile } = useAuth()
-  const [purchases, setPurchases]             = useState<PurchaseRow[]>([])
-  const [loading, setLoading]                 = useState(true)
-  const [addReceiptFor, setAddReceiptFor]     = useState<PurchaseRow | null>(null)
+  const [purchases, setPurchases]               = useState<PurchaseRow[]>([])
+  const [loading, setLoading]                   = useState(true)
+  const [addReceiptFor, setAddReceiptFor]       = useState<PurchaseRow | null>(null)
   const [lightboxReceipts, setLightboxReceipts] = useState<LightboxReceipt[] | null>(null)
-  const [loadingReceipts, setLoadingReceipts] = useState<string | null>(null)
+  const [loadingReceipts, setLoadingReceipts]   = useState<string | null>(null)
+
+  // Amount editing
+  const [editingAmount, setEditingAmount] = useState<string | null>(null) // purchaseId
+  const [editAmount, setEditAmount]       = useState('')
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -183,7 +275,6 @@ export default function HistoryPage() {
   async function openLightbox(receipts: ReceiptRow[], purchaseId: string) {
     setLoadingReceipts(purchaseId)
     const sorted = [...receipts].sort((a, b) => a.page_number - b.page_number)
-
     const { data } = await supabase.storage
       .from('receipts')
       .createSignedUrls(sorted.map(r => r.storage_path), 3600)
@@ -196,27 +287,40 @@ export default function HistoryPage() {
     if (items.length > 0) setLightboxReceipts(items)
   }
 
-  async function handleDeleteReceipt(receiptId: string) {
-    const receipt = lightboxReceipts?.find(r => r.id === receiptId)
-    if (!receipt) return
+  async function handleDeleteReceipts(ids: string[]) {
+    const toDelete = (lightboxReceipts ?? []).filter(r => ids.includes(r.id))
 
-    await supabase.storage.from('receipts').remove([receipt.storage_path])
-    await supabase.from('purchase_receipts').delete().eq('id', receiptId)
+    // Delete from Storage (all in parallel, ignore individual failures)
+    await Promise.allSettled(
+      toDelete.map(r => supabase.storage.from('receipts').remove([r.storage_path])),
+    )
+    // Delete from DB
+    await supabase.from('purchase_receipts').delete().in('id', ids)
 
-    // Optimistic update in purchases list
+    // Optimistic update in purchase list
     setPurchases(prev =>
       prev.map(p => ({
         ...p,
-        purchase_receipts: p.purchase_receipts.filter(r => r.id !== receiptId),
+        purchase_receipts: p.purchase_receipts.filter(r => !ids.includes(r.id)),
       })),
     )
 
-    const remaining = (lightboxReceipts ?? []).filter(r => r.id !== receiptId)
+    const remaining = (lightboxReceipts ?? []).filter(r => !ids.includes(r.id))
     if (remaining.length === 0) {
       setLightboxReceipts(null)
     } else {
       setLightboxReceipts(remaining)
     }
+  }
+
+  async function saveAmount(purchaseId: string) {
+    const amount = parseFloat(editAmount)
+    const value  = !isNaN(amount) && amount > 0 ? amount : null
+    await supabase.from('purchases').update({ total_amount: value }).eq('id', purchaseId)
+    setPurchases(prev =>
+      prev.map(p => p.id === purchaseId ? { ...p, total_amount: value } : p),
+    )
+    setEditingAmount(null)
   }
 
   function formatDate(iso: string | null) {
@@ -231,14 +335,12 @@ export default function HistoryPage() {
     return `₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
   }
 
-  // ── Loading ──
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-4 border-primary-400 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
-  // ── Empty ──
   if (purchases.length === 0) return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="bg-primary-50 rounded-full p-6 mb-5">
@@ -255,7 +357,7 @@ export default function HistoryPage() {
         <ReceiptLightbox
           receipts={lightboxReceipts}
           onClose={() => setLightboxReceipts(null)}
-          onDelete={handleDeleteReceipt}
+          onDelete={handleDeleteReceipts}
         />
       )}
 
@@ -264,10 +366,7 @@ export default function HistoryPage() {
           purchaseId={addReceiptFor.id}
           storeName={addReceiptFor.stores?.name}
           celebrationMode={false}
-          onClose={() => {
-            setAddReceiptFor(null)
-            loadHistory()
-          }}
+          onClose={() => { setAddReceiptFor(null); loadHistory() }}
         />
       )}
 
@@ -281,14 +380,15 @@ export default function HistoryPage() {
         </div>
 
         {purchases.map(purchase => {
-          const v             = storeVisual(purchase.stores?.name ?? null)
-          const receipts      = purchase.purchase_receipts ?? []
-          const amount        = formatAmount(purchase.total_amount)
-          const isLoading     = loadingReceipts === purchase.id
+          const v         = storeVisual(purchase.stores?.name ?? null)
+          const receipts  = purchase.purchase_receipts ?? []
+          const amount    = formatAmount(purchase.total_amount)
+          const isLoading = loadingReceipts === purchase.id
+          const isEditing = editingAmount === purchase.id
 
           return (
             <div key={purchase.id} className="card">
-              {/* Store + amount */}
+              {/* Store + amount row */}
               <div className="flex items-center justify-between mb-2">
                 <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg}`}>
                   <span className="text-base">{v.emoji}</span>
@@ -296,9 +396,60 @@ export default function HistoryPage() {
                     {purchase.stores?.name ?? 'ללא חנות'}
                   </span>
                 </div>
-                {amount && (
-                  <span className="text-lg font-extrabold text-gray-800">{amount}</span>
-                )}
+
+                {/* Amount + edit */}
+                <div className="flex items-center gap-1.5">
+                  {isEditing ? (
+                    <>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={editAmount}
+                          onChange={e => setEditAmount(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter')  saveAmount(purchase.id)
+                            if (e.key === 'Escape') setEditingAmount(null)
+                          }}
+                          className="w-24 text-sm font-bold text-center rounded-xl
+                                     border border-gray-200 bg-gray-50 px-2 py-1.5 pl-5
+                                     focus:outline-none focus:ring-2 focus:ring-primary-300"
+                          autoFocus
+                        />
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₪</span>
+                      </div>
+                      <button
+                        onClick={() => saveAmount(purchase.id)}
+                        className="text-primary-500 hover:text-primary-700 transition-colors"
+                      >
+                        <CheckCircle2 className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingAmount(null)}
+                        className="text-gray-300 hover:text-gray-500 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {amount && (
+                        <span className="text-lg font-extrabold text-gray-800">{amount}</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          setEditAmount(purchase.total_amount != null ? String(purchase.total_amount) : '')
+                          setEditingAmount(purchase.id)
+                        }}
+                        className="p-1 rounded-lg text-gray-300 hover:text-primary-500
+                                   hover:bg-primary-50 transition-colors"
+                        title="ערוך סכום"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Date */}
@@ -325,7 +476,6 @@ export default function HistoryPage() {
                       {receipts.length}
                     </span>
                   </button>
-
                   <button
                     onClick={() => setAddReceiptFor(purchase)}
                     title="הוסף תמונות נוספות"
