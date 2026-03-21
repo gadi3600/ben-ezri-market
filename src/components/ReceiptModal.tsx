@@ -5,19 +5,13 @@ import { useAuth } from '../contexts/AuthContext'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload  = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-type SupportedMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
-const SUPPORTED: SupportedMediaType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-function toSupportedMediaType(type: string): SupportedMediaType {
-  return (SUPPORTED.includes(type as SupportedMediaType) ? type : 'image/jpeg') as SupportedMediaType
+async function fileHash(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const hash = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 16)
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,12 +39,14 @@ export default function ReceiptModal({
   onClose,
 }: Props) {
   const { profile } = useAuth()
-  const [step, setStep]                   = useState<Step>('choose')
-  const [files, setFiles]                 = useState<File[]>([])
-  const [manualAmount, setManualAmount]   = useState('')
-  const [analysis, setAnalysis]           = useState<AnalysisResult | null>(null)
+  const [step, setStep]                       = useState<Step>('choose')
+  const [files, setFiles]                     = useState<File[]>([])
+  const [manualAmount, setManualAmount]       = useState('')
+  const [analysis, setAnalysis]               = useState<AnalysisResult | null>(null)
   const [confirmedAmount, setConfirmedAmount] = useState('')
-  const [error, setError]                 = useState<string | null>(null)
+  const [error, setError]                     = useState<string | null>(null)
+  const [skippedCount, setSkippedCount]       = useState(0)
+  const [savedCount, setSavedCount]           = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function addFiles(fl: FileList | null) {
@@ -64,77 +60,85 @@ export default function ReceiptModal({
     setError(null)
 
     try {
-      // Convert files to base64 while we still have the File objects
-      const base64List = await Promise.all(files.map(fileToBase64))
+      // List existing files for this purchase — used for duplicate detection
+      const { data: existingFiles } = await supabase.storage
+        .from('receipts')
+        .list(`${profile.family_id}/${purchaseId}`)
+      const existingNames = new Set((existingFiles ?? []).map(f => f.name))
 
-      // Upload to Supabase Storage + save receipt records
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
+      // Determine starting page number
+      const { data: existingRecords } = await supabase
+        .from('purchase_receipts')
+        .select('page_number')
+        .eq('purchase_id', purchaseId)
+        .order('page_number', { ascending: false })
+        .limit(1)
+      const maxPage = existingRecords?.[0]?.page_number ?? 0
+
+      const paths: string[] = []
+      let skipped = 0
+
+      for (const file of files) {
         const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-        const path = `${profile.family_id}/${purchaseId}/${Date.now()}_${i + 1}.${ext}`
+        const hash = await fileHash(file)
+
+        // Skip duplicates (same hash = same content)
+        if ([...existingNames].some(n => n.startsWith(hash))) {
+          skipped++
+          continue
+        }
+
+        const path = `${profile.family_id}/${purchaseId}/${hash}.${ext}`
 
         const { error: uploadErr } = await supabase.storage
           .from('receipts')
-          .upload(path, file, { upsert: true })
+          .upload(path, file, { upsert: false })
         if (uploadErr) throw uploadErr
 
         await supabase.from('purchase_receipts').insert({
-          purchase_id: purchaseId,
+          purchase_id:  purchaseId,
           storage_path: path,
-          page_number: i + 1,
-          uploaded_by: profile.id,
+          page_number:  maxPage + paths.length + 1,
+          uploaded_by:  profile.id,
         })
+
+        paths.push(path)
+        existingNames.add(`${hash}.${ext}`) // block within-batch duplicates
+      }
+
+      setSkippedCount(skipped)
+      setSavedCount(paths.length)
+
+      if (paths.length === 0) {
+        setError(
+          skipped === 1
+            ? 'התמונה כבר קיימת — לא הועלה דבר חדש'
+            : `כל ${skipped} התמונות כבר קיימות`,
+        )
+        setStep('choose')
+        return
       }
 
       setStep('analyzing')
 
-      // Call Anthropic API directly from the browser with base64 images
-      const imageContent = files.map((file, i) => ({
-        type: 'image' as const,
-        source: {
-          type: 'base64' as const,
-          media_type: toSupportedMediaType(file.type),
-          data: base64List[i],
-        },
-      }))
+      // Get signed URLs → call Edge Function proxy (avoids CORS)
+      const { data: signed } = await supabase.storage
+        .from('receipts')
+        .createSignedUrls(paths, 300)
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                ...imageContent,
-                {
-                  type: 'text',
-                  text: 'ניתח את החשבונית. החזר JSON בלבד (ללא markdown, ללא הסבר) בפורמט: {"total": מספר_עשרוני_או_null, "store": "שם_החנות_או_null", "date": "DD/MM/YYYY_או_null", "items_count": מספר_שלם_או_null}',
-                },
-              ],
-            },
-          ],
-        }),
-      })
+      const imageUrls = (signed ?? []).map(s => s.signedUrl).filter(Boolean)
 
-      if (!response.ok) {
-        throw new Error(`Anthropic ${response.status}: ${await response.text()}`)
-      }
-
-      const claude = await response.json()
-      const text: string = claude.content[0].text
-      const match = text.match(/\{[\s\S]*\}/)
-      if (match) {
-        const result = JSON.parse(match[0]) as AnalysisResult
-        setAnalysis(result)
-        if (result.total) setConfirmedAmount(String(result.total))
+      if (imageUrls.length > 0) {
+        const { data: result, error: fnErr } = await supabase.functions.invoke(
+          'analyze-receipt',
+          { body: { imageUrls } },
+        )
+        if (!fnErr && result && !result.error) {
+          setAnalysis(result as AnalysisResult)
+          if ((result as AnalysisResult).total) {
+            setConfirmedAmount(String((result as AnalysisResult).total))
+          }
+        }
       }
 
       setStep('result')
@@ -156,7 +160,6 @@ export default function ReceiptModal({
       <div className="absolute inset-0 bg-black/50" onClick={() => onClose()} />
 
       <div className="relative bg-white rounded-t-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
-        {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
@@ -184,7 +187,6 @@ export default function ReceiptModal({
           {/* ── CHOOSE ── */}
           {step === 'choose' && (
             <div className="space-y-3">
-              {/* Photo option */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl
@@ -209,7 +211,6 @@ export default function ReceiptModal({
                 onChange={e => addFiles(e.target.files)}
               />
 
-              {/* Thumbnails + upload button */}
               {files.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex flex-wrap gap-2">
@@ -248,7 +249,6 @@ export default function ReceiptModal({
                 </div>
               )}
 
-              {/* Manual option */}
               <button
                 onClick={() => setStep('manual')}
                 className="w-full flex items-center gap-4 p-4 rounded-2xl
@@ -292,14 +292,10 @@ export default function ReceiptModal({
                   placeholder="0.00"
                   autoFocus
                 />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">
-                  ₪
-                </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₪</span>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setStep('choose')} className="btn-secondary flex-1">
-                  חזור
-                </button>
+                <button onClick={() => setStep('choose')} className="btn-secondary flex-1">חזור</button>
                 <button
                   onClick={() => saveAndClose(parseFloat(manualAmount) || undefined)}
                   disabled={!manualAmount || isNaN(parseFloat(manualAmount))}
@@ -340,6 +336,12 @@ export default function ReceiptModal({
           {/* ── RESULT ── */}
           {step === 'result' && (
             <div className="space-y-4">
+              {skippedCount > 0 && (
+                <p className="text-xs text-amber-600 text-center bg-amber-50 rounded-xl py-2 px-3">
+                  {skippedCount} {skippedCount === 1 ? 'תמונה כפולה דולגה' : 'תמונות כפולות דולגו'}
+                </p>
+              )}
+
               {analysis && (analysis.store || analysis.date || analysis.items_count) ? (
                 <div className="card-green">
                   <p className="text-xs font-bold text-primary-600 uppercase tracking-wide mb-3">
@@ -360,9 +362,7 @@ export default function ReceiptModal({
                     )}
                     {analysis.items_count && (
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-semibold text-primary-800">
-                          {analysis.items_count} פריטים
-                        </span>
+                        <span className="font-semibold text-primary-800">{analysis.items_count} פריטים</span>
                         <span className="text-primary-400 text-xs">כמות</span>
                       </div>
                     )}
@@ -375,7 +375,6 @@ export default function ReceiptModal({
                 </div>
               )}
 
-              {/* Editable total amount */}
               <div>
                 <label className="text-sm font-bold text-gray-700 block mb-2">סכום כולל (₪)</label>
                 <div className="relative">
@@ -387,16 +386,12 @@ export default function ReceiptModal({
                     className="input text-xl font-bold text-center pl-8"
                     placeholder="0.00"
                   />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">
-                    ₪
-                  </span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₪</span>
                 </div>
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => onClose()} className="btn-secondary flex-1">
-                  דלג
-                </button>
+                <button onClick={() => onClose()} className="btn-secondary flex-1">דלג</button>
                 <button
                   onClick={() => saveAndClose(parseFloat(confirmedAmount) || undefined)}
                   className="btn-primary flex-1"
@@ -407,7 +402,7 @@ export default function ReceiptModal({
               </div>
 
               <p className="text-xs text-center text-gray-400">
-                ✓ {files.length} {files.length === 1 ? 'תמונה נשמרה' : 'תמונות נשמרו'}
+                ✓ {savedCount} {savedCount === 1 ? 'תמונה נשמרה' : 'תמונות נשמרו'}
               </p>
             </div>
           )}

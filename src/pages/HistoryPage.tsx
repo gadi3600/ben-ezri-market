@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Clock, Receipt, Plus, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Clock, Receipt, Plus, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import ReceiptModal from '../components/ReceiptModal'
@@ -10,6 +10,10 @@ interface ReceiptRow {
   id: string
   storage_path: string
   page_number: number
+}
+
+interface LightboxReceipt extends ReceiptRow {
+  signedUrl: string
 }
 
 interface PurchaseRow {
@@ -42,68 +46,102 @@ function storeVisual(name: string | null) {
 // ── Receipt Lightbox ──────────────────────────────────────────────────────────
 
 function ReceiptLightbox({
-  urls,
+  receipts,
   onClose,
+  onDelete,
 }: {
-  urls: string[]
+  receipts: LightboxReceipt[]
   onClose: () => void
+  onDelete: (id: string) => Promise<void>
 }) {
-  const [idx, setIdx] = useState(0)
+  const [idx, setIdx]       = useState(0)
+  const [deleting, setDeleting] = useState(false)
+
+  // Clamp idx when receipts shrink after a delete
+  useEffect(() => {
+    if (receipts.length > 0 && idx >= receipts.length) {
+      setIdx(receipts.length - 1)
+    }
+  }, [receipts.length, idx])
+
+  const safeIdx = Math.min(idx, Math.max(0, receipts.length - 1))
+  const current = receipts[safeIdx]
+  if (!current) return null
+
+  async function handleDelete() {
+    setDeleting(true)
+    await onDelete(current.id)
+    setDeleting(false)
+  }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col select-none">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 text-white">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 text-white">
         <button
           onClick={onClose}
           className="p-2 rounded-xl hover:bg-white/10 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
-        {urls.length > 1 && (
-          <span className="text-sm font-semibold">
-            {idx + 1} / {urls.length}
-          </span>
-        )}
-        <div className="w-9" />
+
+        <div className="flex items-center gap-3">
+          {receipts.length > 1 && (
+            <span className="text-sm font-semibold">{safeIdx + 1} / {receipts.length}</span>
+          )}
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="p-2 rounded-xl hover:bg-red-500/20 text-red-400
+                       hover:text-red-300 disabled:opacity-40 transition-colors"
+            title="מחק תמונה זו"
+          >
+            {deleting
+              ? <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+              : <Trash2 className="w-5 h-5" />
+            }
+          </button>
+        </div>
       </div>
 
-      {/* Image */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-4 overflow-hidden">
+      {/* Image — min-h-0 allows flex-1 to actually shrink so max-h-full works */}
+      <div className="flex-1 min-h-0 flex items-center justify-center p-4">
         <img
-          src={urls[idx]}
-          alt={`עמוד ${idx + 1}`}
+          src={current.signedUrl}
+          alt={`עמוד ${current.page_number}`}
           className="max-w-full max-h-full object-contain rounded-xl"
         />
       </div>
 
-      {/* Pagination */}
-      {urls.length > 1 && (
-        <div className="flex justify-center items-center gap-4 pb-6">
+      {/* Navigation dots + arrows */}
+      {receipts.length > 1 && (
+        <div className="flex-shrink-0 flex justify-center items-center gap-4 pb-8">
           <button
             onClick={() => setIdx(i => Math.max(0, i - 1))}
-            disabled={idx === 0}
+            disabled={safeIdx === 0}
             className="p-3 rounded-xl bg-white/10 hover:bg-white/20
                        disabled:opacity-30 text-white transition-colors"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-1.5">
-            {urls.map((_, i) => (
+          <div className="flex items-center gap-2">
+            {receipts.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setIdx(i)}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  i === idx ? 'bg-white' : 'bg-white/30'
+                className={`rounded-full transition-all ${
+                  i === safeIdx
+                    ? 'w-3 h-3 bg-white'
+                    : 'w-2 h-2 bg-white/35 hover:bg-white/60'
                 }`}
               />
             ))}
           </div>
 
           <button
-            onClick={() => setIdx(i => Math.min(urls.length - 1, i + 1))}
-            disabled={idx === urls.length - 1}
+            onClick={() => setIdx(i => Math.min(receipts.length - 1, i + 1))}
+            disabled={safeIdx === receipts.length - 1}
             className="p-3 rounded-xl bg-white/10 hover:bg-white/20
                        disabled:opacity-30 text-white transition-colors"
           >
@@ -119,12 +157,11 @@ function ReceiptLightbox({
 
 export default function HistoryPage() {
   const { profile } = useAuth()
-  const [purchases, setPurchases] = useState<PurchaseRow[]>([])
-  const [loading, setLoading]     = useState(true)
-
+  const [purchases, setPurchases]             = useState<PurchaseRow[]>([])
+  const [loading, setLoading]                 = useState(true)
   const [addReceiptFor, setAddReceiptFor]     = useState<PurchaseRow | null>(null)
-  const [lightboxUrls, setLightboxUrls]       = useState<string[] | null>(null)
-  const [loadingReceipts, setLoadingReceipts] = useState<string | null>(null) // purchaseId
+  const [lightboxReceipts, setLightboxReceipts] = useState<LightboxReceipt[] | null>(null)
+  const [loadingReceipts, setLoadingReceipts] = useState<string | null>(null)
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -146,13 +183,40 @@ export default function HistoryPage() {
   async function openLightbox(receipts: ReceiptRow[], purchaseId: string) {
     setLoadingReceipts(purchaseId)
     const sorted = [...receipts].sort((a, b) => a.page_number - b.page_number)
+
     const { data } = await supabase.storage
       .from('receipts')
       .createSignedUrls(sorted.map(r => r.storage_path), 3600)
 
-    const urls = (data ?? []).map(d => d.signedUrl).filter(Boolean)
+    const items: LightboxReceipt[] = sorted
+      .map((r, i) => ({ ...r, signedUrl: data?.[i]?.signedUrl ?? '' }))
+      .filter(r => r.signedUrl)
+
     setLoadingReceipts(null)
-    if (urls.length > 0) setLightboxUrls(urls)
+    if (items.length > 0) setLightboxReceipts(items)
+  }
+
+  async function handleDeleteReceipt(receiptId: string) {
+    const receipt = lightboxReceipts?.find(r => r.id === receiptId)
+    if (!receipt) return
+
+    await supabase.storage.from('receipts').remove([receipt.storage_path])
+    await supabase.from('purchase_receipts').delete().eq('id', receiptId)
+
+    // Optimistic update in purchases list
+    setPurchases(prev =>
+      prev.map(p => ({
+        ...p,
+        purchase_receipts: p.purchase_receipts.filter(r => r.id !== receiptId),
+      })),
+    )
+
+    const remaining = (lightboxReceipts ?? []).filter(r => r.id !== receiptId)
+    if (remaining.length === 0) {
+      setLightboxReceipts(null)
+    } else {
+      setLightboxReceipts(remaining)
+    }
   }
 
   function formatDate(iso: string | null) {
@@ -187,15 +251,14 @@ export default function HistoryPage() {
 
   return (
     <>
-      {/* Receipt lightbox */}
-      {lightboxUrls && (
+      {lightboxReceipts && (
         <ReceiptLightbox
-          urls={lightboxUrls}
-          onClose={() => setLightboxUrls(null)}
+          receipts={lightboxReceipts}
+          onClose={() => setLightboxReceipts(null)}
+          onDelete={handleDeleteReceipt}
         />
       )}
 
-      {/* Add/edit receipt modal */}
       {addReceiptFor && (
         <ReceiptModal
           purchaseId={addReceiptFor.id}
@@ -209,7 +272,6 @@ export default function HistoryPage() {
       )}
 
       <div className="space-y-3 pb-6">
-        {/* Header */}
         <div className="card-green flex items-center gap-3">
           <Clock className="w-5 h-5 text-primary-600 flex-shrink-0" />
           <div>
@@ -219,14 +281,14 @@ export default function HistoryPage() {
         </div>
 
         {purchases.map(purchase => {
-          const v        = storeVisual(purchase.stores?.name ?? null)
-          const receipts = purchase.purchase_receipts ?? []
-          const amount   = formatAmount(purchase.total_amount)
-          const isLoadingThis = loadingReceipts === purchase.id
+          const v             = storeVisual(purchase.stores?.name ?? null)
+          const receipts      = purchase.purchase_receipts ?? []
+          const amount        = formatAmount(purchase.total_amount)
+          const isLoading     = loadingReceipts === purchase.id
 
           return (
             <div key={purchase.id} className="card">
-              {/* Store + amount row */}
+              {/* Store + amount */}
               <div className="flex items-center justify-between mb-2">
                 <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg}`}>
                   <span className="text-base">{v.emoji}</span>
@@ -242,22 +304,21 @@ export default function HistoryPage() {
               {/* Date */}
               <p className="text-xs text-gray-400 mb-3">{formatDate(purchase.purchased_at)}</p>
 
-              {/* Receipt button(s) */}
+              {/* Receipt buttons */}
               {receipts.length > 0 ? (
                 <div className="flex gap-2">
                   <button
                     onClick={() => openLightbox(receipts, purchase.id)}
-                    disabled={isLoadingThis}
+                    disabled={isLoading}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl flex-1
                                bg-primary-50 text-primary-700 text-sm font-semibold
                                hover:bg-primary-100 active:bg-primary-200
                                transition-colors disabled:opacity-60"
                   >
-                    {isLoadingThis ? (
-                      <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Receipt className="w-4 h-4 flex-shrink-0" />
-                    )}
+                    {isLoading
+                      ? <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+                      : <Receipt className="w-4 h-4 flex-shrink-0" />
+                    }
                     <span className="flex-1">צפה בחשבונית</span>
                     <span className="bg-primary-200 text-primary-800 text-xs font-extrabold
                                      rounded-full px-2 py-0.5 min-w-[22px] text-center">
@@ -265,13 +326,11 @@ export default function HistoryPage() {
                     </span>
                   </button>
 
-                  {/* Add more pages */}
                   <button
                     onClick={() => setAddReceiptFor(purchase)}
                     title="הוסף תמונות נוספות"
                     className="p-2.5 rounded-xl bg-gray-50 text-gray-400
-                               hover:bg-primary-50 hover:text-primary-500
-                               transition-colors"
+                               hover:bg-primary-50 hover:text-primary-500 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
