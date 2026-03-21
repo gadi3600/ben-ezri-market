@@ -99,8 +99,8 @@ serve(async (req) => {
 
     // ── Save items to purchase_items using service role (bypasses RLS) ──────────
     if (purchaseId && result.items?.length > 0) {
-      const supabaseUrl      = Deno.env.get("SUPABASE_URL")
-      const serviceRoleKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+      const supabaseUrl      = Deno.env.get("APP_SUPABASE_URL")
+      const serviceRoleKey   = Deno.env.get("APP_SERVICE_ROLE_KEY")
 
       if (supabaseUrl && serviceRoleKey) {
         const supabase = createClient(supabaseUrl, serviceRoleKey)
