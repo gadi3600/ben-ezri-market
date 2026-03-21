@@ -20,16 +20,27 @@ export default function FamilySetupPage() {
     setLoading(true)
     setError(null)
     try {
-      // SECURITY DEFINER RPC — עוקף RLS באופן מבוקר,
-      // יוצר משפחה ומעדכן את המשתמש ל-admin בפעולה אחת
-      const { error } = await supabase.rpc('create_family', {
+      const { data, error } = await supabase.rpc('create_family', {
         family_name: familyName.trim(),
       })
-      if (error) throw error
+
+      // לוג מלא לדיבאג — פתח DevTools Console כדי לראות
+      console.group('🏠 create_family RPC')
+      console.log('data:', data)
+      console.log('error:', error)
+      if (error) console.error('error details:', JSON.stringify(error, null, 2))
+      console.groupEnd()
+
+      if (error) {
+        setError(`[${error.code}] ${error.message}${error.details ? ` — ${error.details}` : ''}`)
+        return
+      }
+
+      console.log('✅ Family created, id:', data)
       await refreshProfile()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'שגיאה ביצירת המשפחה'
-      setError(msg.replace('ERROR: ', '').replace('SQLSTATE: P0001', '').trim())
+      console.error('💥 createFamily exception:', err)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
@@ -40,15 +51,26 @@ export default function FamilySetupPage() {
     setLoading(true)
     setError(null)
     try {
-      // SECURITY DEFINER RPC — מוצא משפחה לפי קוד ומצרף את המשתמש
-      const { error } = await supabase.rpc('join_family', {
+      const { data, error } = await supabase.rpc('join_family', {
         p_invite_code: inviteCode.trim(),
       })
-      if (error) throw error
+
+      console.group('🤝 join_family RPC')
+      console.log('data:', data)
+      console.log('error:', error)
+      if (error) console.error('error details:', JSON.stringify(error, null, 2))
+      console.groupEnd()
+
+      if (error) {
+        setError(`[${error.code}] ${error.message}${error.details ? ` — ${error.details}` : ''}`)
+        return
+      }
+
+      console.log('✅ Joined family, id:', data)
       await refreshProfile()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'שגיאה בהצטרפות'
-      setError(msg.replace('ERROR: ', '').replace('SQLSTATE: P0001', '').trim())
+      console.error('💥 joinFamily exception:', err)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }

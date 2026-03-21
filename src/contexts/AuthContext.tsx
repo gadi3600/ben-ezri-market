@@ -37,11 +37,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data) setProfile(data)
   }
 
+  // refreshProfile uses getSession() directly to avoid stale closure on session state
   async function refreshProfile() {
-    if (session?.user.id) {
-      const data = await fetchProfile(session.user.id)
-      if (data) setProfile(data)
+    const { data: { session: currentSession } } = await supabase.auth.getSession()
+    const userId = currentSession?.user.id
+    if (!userId) {
+      console.warn('refreshProfile: no active session')
+      return
     }
+    console.log('refreshProfile: fetching profile for', userId)
+    const data = await fetchProfile(userId)
+    console.log('refreshProfile: result', data)
+    if (data) setProfile(data)
   }
 
   useEffect(() => {
