@@ -17,6 +17,43 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(parts.join(""))
 }
 
+// ── JSON cleaning + parsing ───────────────────────────────────────────────────
+//
+// Claude sometimes returns:
+//   1. Markdown fences: ```json ... ```
+//   2. Hebrew geresh marks inside strings: ק"ג  מ"ל  ג"ר
+//      These look like ASCII " but break JSON.parse at that position.
+//
+function parseClaudeJSON(raw: string): unknown {
+  // Step 1: strip markdown code fences
+  let text = raw
+    .replace(/^```(?:json)?\s*/im, "")
+    .replace(/\s*```\s*$/m, "")
+    .trim()
+
+  // Step 2: extract the outermost { … } object
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) {
+    console.error("[analyze-receipt] No JSON object found. Raw response:", raw.slice(0, 500))
+    throw new Error(`No JSON object in Claude response: ${raw.slice(0, 200)}`)
+  }
+  text = match[0]
+
+  // Step 3: fix Hebrew geresh — replace " between Hebrew letters with '
+  // e.g.  ק"ג  →  ק'ג   |   מ"ל  →  מ'ל   |   ג"ר  →  ג'ר
+  text = text.replace(/([\u05D0-\u05EA])"([\u05D0-\u05EA])/g, "$1'$2")
+
+  // Step 4: parse with detailed error logging
+  try {
+    return JSON.parse(text)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[analyze-receipt] JSON.parse failed:", msg)
+    console.error("[analyze-receipt] Cleaned text (first 800 chars):", text.slice(0, 800))
+    throw new Error(`JSON parse error — ${msg}`)
+  }
+}
+
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 serve(async (req) => {
@@ -31,7 +68,7 @@ serve(async (req) => {
     }
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY")
-    if (!apiKey)          throw new Error("ANTHROPIC_API_KEY not set")
+    if (!apiKey)            throw new Error("ANTHROPIC_API_KEY not set")
     if (!imageUrls?.length) throw new Error("imageUrls is empty")
 
     // Fetch each signed URL and convert to base64
@@ -66,7 +103,16 @@ serve(async (req) => {
               ...imageContent,
               {
                 type: "text",
-                text: 'ניתח את החשבונית. החזר JSON בלבד (ללא markdown) בפורמט המדויק:\n{"total": מספר_או_null, "store": "שם_חנות_או_null", "date": "DD/MM/YYYY_או_null", "items": [{"name": "שם מוצר", "quantity": מספר, "unit": "יחידה", "price_per_unit": מספר_או_null, "total_price": מספר_או_null}]}\nunit יכול להיות: יחידה, ק"ג, ליטר, מ"ל, גרם. אם אין פריטים ברורים — items: []',
+                // Prompt in English to reduce instruction/data confusion.
+                // Units: avoid abbreviations with " (e.g. use קג not ק"ג).
+                text: `Analyze this receipt image. Return ONLY a valid JSON object — no markdown, no text before or after.
+Schema:
+{"total": <number|null>, "store": "<store name|null>", "date": "<DD/MM/YYYY|null>", "items": [{"name": "<product name>", "quantity": <number>, "unit": "<unit>", "price_per_unit": <number|null>, "total_price": <number|null>}]}
+Rules:
+- Use standard ASCII double-quotes only. Never use " as part of a Hebrew word inside a string.
+- For units use only: יחידה, קג, ליטר, מל, גרם, יח (no abbreviations with quotes).
+- Product names in Hebrew as they appear on the receipt.
+- If no items are clearly visible, use "items": [].`,
               },
             ],
           },
@@ -80,11 +126,11 @@ serve(async (req) => {
     }
 
     const claude = await response.json()
-    const text: string = claude.content[0].text
-    const match = text.match(/\{[\s\S]*\}/)
-    if (!match) throw new Error(`No JSON in Claude response: ${text}`)
+    const rawText: string = claude.content[0].text
 
-    const result = JSON.parse(match[0]) as {
+    console.log("[analyze-receipt] Raw Claude response:", rawText.slice(0, 300))
+
+    const result = parseClaudeJSON(rawText) as {
       total: number | null
       store: string | null
       date: string | null
@@ -99,8 +145,8 @@ serve(async (req) => {
 
     // ── Save items to purchase_items using service role (bypasses RLS) ──────────
     if (purchaseId && result.items?.length > 0) {
-      const supabaseUrl      = Deno.env.get("APP_SUPABASE_URL")
-      const serviceRoleKey   = Deno.env.get("APP_SERVICE_ROLE_KEY")
+      const supabaseUrl    = Deno.env.get("APP_SUPABASE_URL")
+      const serviceRoleKey = Deno.env.get("APP_SERVICE_ROLE_KEY")
 
       if (supabaseUrl && serviceRoleKey) {
         const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -124,6 +170,8 @@ serve(async (req) => {
         } else {
           console.log(`[analyze-receipt] saved ${result.items.length} items for purchase ${purchaseId}`)
         }
+      } else {
+        console.warn("[analyze-receipt] APP_SUPABASE_URL or APP_SERVICE_ROLE_KEY not set — skipping DB write")
       }
     }
 
@@ -132,7 +180,7 @@ serve(async (req) => {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error("[analyze-receipt]", message)
+    console.error("[analyze-receipt] fatal:", message)
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...CORS, "Content-Type": "application/json" },
