@@ -87,7 +87,7 @@ serve(async (req) => {
     )
 
     const controller = new AbortController()
-    const timeoutId  = setTimeout(() => controller.abort(), 30_000)
+    const timeoutId  = setTimeout(() => controller.abort(), 120_000)
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -98,8 +98,8 @@ serve(async (req) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
+        model: "claude-opus-4-5",
+        max_tokens: 16000,
         messages: [
           {
             role: "user",
@@ -107,7 +107,7 @@ serve(async (req) => {
               ...imageContent,
               {
                 type: "text",
-                text: `Analyze this receipt image. Return ONLY valid JSON — no markdown, no backticks, no text before or after the JSON object.
+                text: `Analyze this receipt image. Return ONLY valid JSON, no markdown, no backticks, no explanations, no text before or after the JSON object.
 Schema:
 {"total": <number|null>, "store": "<store name|null>", "date": "<DD/MM/YYYY|null>", "items": [{"name": "<product name>", "quantity": <number>, "unit": "<unit>", "price_per_unit": <number|null>, "total_price": <number|null>}]}
 Rules:
