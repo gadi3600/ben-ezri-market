@@ -30,6 +30,100 @@ interface Props {
   onClose: () => void
 }
 
+// ── Category definitions ──────────────────────────────────────────────────────
+
+interface Category {
+  id: string
+  label: string
+  emoji: string
+  color: string
+  keywords: string[]
+}
+
+const CATEGORIES: Category[] = [
+  {
+    id: 'cleaning',
+    label: 'ניקוי וטואלטיקה',
+    emoji: '🧹',
+    color: '#06b6d4',
+    keywords: ['סבון','שמפו','ניקוי','אבקת','נוזל','מרכך','ניחוח','דאודורנט','קרם','משחת שיניים','מברשת','טואלט','נייר טואלט','מגבת','ספוג','פיירי','ג\'ל','לכה','טמפקס','פד','שינוי','לק','מניקור','גילוח','ראש','גוף','קרם גוף'],
+  },
+  {
+    id: 'dairy',
+    label: 'מקרר, חלב וביצים',
+    emoji: '🥛',
+    color: '#3b82f6',
+    keywords: ['חלב','גבינה','יוגורט','ביצ','קוטג','שמנת','חמאה','מוצרלה','פטה','עמק','תנובה','ריקוטה','לבן','דנונה','מחלבות','קפיר','ביצים'],
+  },
+  {
+    id: 'meat',
+    label: 'בשר ודגים',
+    emoji: '🥩',
+    color: '#ef4444',
+    keywords: ['עוף','בשר','בקר','טלה','דג','סלמון','טונה','נקניק','שניצל','המבורגר','כבד','פרגית','חזה','שוק','כנף','בשר טחון','פילה','דניס','לברק','סרדין','קרפיון','קציצ'],
+  },
+  {
+    id: 'produce',
+    label: 'ירקות ופירות',
+    emoji: '🥦',
+    color: '#22c55e',
+    keywords: ['עגב','מלפפון','חסה','גזר','בצל','תפוח','תפוז','בנ','אבוקד','לימון','אבטיח','ענב','פלפל','ברוקול','כרובית','קישוא','חצילים','תרד','שום','פטרוז','כוסב','נענע','בזיל','מנגו','אנ','תות','מלון','אגס','שז','דובדב','רמון','פסיפלורה','פיקוס','ירק','פרי','תפוחי','תפוחים'],
+  },
+  {
+    id: 'dry',
+    label: 'מזווה ויבש',
+    emoji: '🌾',
+    color: '#f59e0b',
+    keywords: ['אורז','פסטה','קמח','סוכר','שמן','מלח','פלפל שחור','תבלין','עדש','שעועית','חומוס','קטניות','לחם','פיתה','קרקר','ביסקוויט','שוקולד','קפה','תה','קנולה','זית','חומץ','רסק','פסטו','שימורי','טונה שימורים','פת','דגנים','גרנולה','שיבולת','קוואקר','דגנ','ממרח','טחינה','חלווה','ריבה','דבש','סירופ','וניל','אבקת','אפייה','שמרים','קוקוס'],
+  },
+  {
+    id: 'drinks',
+    label: 'שתייה',
+    emoji: '🥤',
+    color: '#8b5cf6',
+    keywords: ['מים','מיץ','קולה','ספרייט','פאנטה','בירה','יין','וודקה','סודה','אייס טי','נקטר','ענבים','תפוזים שתייה','משקה','לימונדה','שייק','אנרגיה','רד בול','פוקוס','נביעות','עדן'],
+  },
+  {
+    id: 'disposable',
+    label: 'חד פעמי',
+    emoji: '🥡',
+    color: '#f97316',
+    keywords: ['כוסות','צלחות','קערות','סכו"ם','כפית','מזלג','סכין','שקית','ניילון','אלומיניום','רדיד','נייר אפייה','כוס חד','צלחת חד','קופסא','מגש','מפיות','מגבונים'],
+  },
+  {
+    id: 'snacks',
+    label: 'חטיפים וממתקים',
+    emoji: '🍿',
+    color: '#ec4899',
+    keywords: ['חטיף','במבה','ביסלי','פופקורן','שוקולד','סוכריות','גומי','וופל','עוגיות','עוגה','פאי','טבעול','פרינגלס','לייס','דוריטוס','אלפינו','קינדר','מארז','מתוק'],
+  },
+  {
+    id: 'frozen',
+    label: 'קפוא ומוכן',
+    emoji: '🧊',
+    color: '#67e8f9',
+    keywords: ['קפוא','גלידה','שטרודל','פשטידה','לחמנייה קפ','פיצה','ניוקי','אפון קפ','תירס קפ','שניצל קפ','בורגר קפ'],
+  },
+]
+
+const OTHER_CATEGORY: Category = {
+  id: 'other',
+  label: 'אחר',
+  emoji: '📦',
+  color: '#94a3b8',
+  keywords: [],
+}
+
+function classifyItem(name: string): Category {
+  const lower = name.toLowerCase()
+  for (const cat of CATEGORIES) {
+    for (const kw of cat.keywords) {
+      if (lower.includes(kw.toLowerCase())) return cat
+    }
+  }
+  return OTHER_CATEGORY
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number | null | undefined) {
@@ -40,6 +134,90 @@ function fmt(n: number | null | undefined) {
 function fmtQty(q: number, unit: string) {
   const n = Number(q)
   return unit === 'יחידה' ? String(n) : `${n} ${unit}`
+}
+
+// ── Simple SVG Pie Chart ──────────────────────────────────────────────────────
+
+interface PieSlice {
+  category: Category
+  total: number
+  percent: number
+  startAngle: number
+  endAngle: number
+}
+
+function PieChart({
+  slices,
+  selectedCat,
+  onSelect,
+}: {
+  slices: PieSlice[]
+  selectedCat: string | null
+  onSelect: (id: string | null) => void
+}) {
+  const size = 200
+  const cx = size / 2
+  const cy = size / 2
+  const r = 80
+  const innerR = 48
+
+  function polarToXY(angle: number, radius: number) {
+    const rad = (angle - 90) * (Math.PI / 180)
+    return {
+      x: cx + radius * Math.cos(rad),
+      y: cy + radius * Math.sin(rad),
+    }
+  }
+
+  function describeSlice(startAngle: number, endAngle: number, selected: boolean) {
+    const outerR = selected ? r + 8 : r
+    const start = polarToXY(startAngle, outerR)
+    const end   = polarToXY(endAngle, outerR)
+    const iStart = polarToXY(startAngle, innerR)
+    const iEnd   = polarToXY(endAngle, innerR)
+    const large  = endAngle - startAngle > 180 ? 1 : 0
+
+    return [
+      `M ${iStart.x} ${iStart.y}`,
+      `L ${start.x} ${start.y}`,
+      `A ${outerR} ${outerR} 0 ${large} 1 ${end.x} ${end.y}`,
+      `L ${iEnd.x} ${iEnd.y}`,
+      `A ${innerR} ${innerR} 0 ${large} 0 ${iStart.x} ${iStart.y}`,
+      'Z',
+    ].join(' ')
+  }
+
+  const selected = slices.find(s => s.category.id === selectedCat)
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[200px]">
+      {slices.map(slice => {
+        const isSel = selectedCat === slice.category.id
+        return (
+          <path
+            key={slice.category.id}
+            d={describeSlice(slice.startAngle, slice.endAngle, isSel)}
+            fill={slice.category.color}
+            opacity={selectedCat && !isSel ? 0.35 : 1}
+            stroke="white"
+            strokeWidth={2}
+            style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+            onClick={() => onSelect(isSel ? null : slice.category.id)}
+          />
+        )
+      })}
+      {/* Center text */}
+      <text x={cx} y={cy - 7} textAnchor="middle" fontSize="11" fill="#64748b" fontWeight="600">
+        {selected ? selected.category.emoji : '🛒'}
+      </text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#94a3b8">
+        {selected ? selected.category.label.split(' ')[0] : 'כל'}
+      </text>
+      <text x={cx} y={cy + 20} textAnchor="middle" fontSize="10" fill="#1e293b" fontWeight="700">
+        {selected ? `${selected.percent.toFixed(0)}%` : 'הקנייה'}
+      </text>
+    </svg>
+  )
 }
 
 // ── PurchaseAnalysis ──────────────────────────────────────────────────────────
@@ -58,9 +236,12 @@ export default function PurchaseAnalysis({
   const [sortCol, setSortCol] = useState<SortCol>('total_price')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
+  // category filter
+  const [selectedCat, setSelectedCat] = useState<string | null>(null)
+
   // ai chat
-  const [messages, setMessages]   = useState<ChatMsg[]>([])
-  const [question, setQuestion]   = useState('')
+  const [messages, setMessages]       = useState<ChatMsg[]>([])
+  const [question, setQuestion]       = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -92,7 +273,61 @@ export default function PurchaseAnalysis({
     }
   }
 
-  const sorted = [...items].sort((a, b) => {
+  // ── stats ───────────────────────────────────────────────────────────────────
+
+  const totalQty     = items.reduce((s, i) => s + Number(i.quantity), 0)
+  const calcTotal    = items.reduce((s, i) => s + Number(i.total_price ?? 0), 0)
+  const displayTotal = totalAmount ?? (calcTotal > 0 ? calcTotal : null)
+  const avgPerItem   = items.length > 0 && displayTotal ? displayTotal / items.length : null
+
+  const top5 = [...items]
+    .filter(i => i.total_price !== null)
+    .sort((a, b) => Number(b.total_price) - Number(a.total_price))
+    .slice(0, 5)
+
+  // ── categories ──────────────────────────────────────────────────────────────
+
+  const itemsWithCat = items.map(item => ({
+    ...item,
+    category: classifyItem(item.name),
+  }))
+
+  // Build pie slices (only categories with items)
+  const catTotals: Record<string, { category: Category; total: number }> = {}
+  for (const item of itemsWithCat) {
+    const id = item.category.id
+    if (!catTotals[id]) catTotals[id] = { category: item.category, total: 0 }
+    catTotals[id].total += Number(item.total_price ?? 0)
+  }
+
+  const grandTotal = Object.values(catTotals).reduce((s, c) => s + c.total, 0)
+
+  const pieSlices: PieSlice[] = Object.values(catTotals)
+    .filter(c => c.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .reduce<{ slices: PieSlice[]; angle: number }>(
+      (acc, c) => {
+        const percent = grandTotal > 0 ? (c.total / grandTotal) * 100 : 0
+        const sweep   = (percent / 100) * 360
+        const slice: PieSlice = {
+          category:   c.category,
+          total:      c.total,
+          percent,
+          startAngle: acc.angle,
+          endAngle:   acc.angle + sweep,
+        }
+        return { slices: [...acc.slices, slice], angle: acc.angle + sweep }
+      },
+      { slices: [], angle: 0 },
+    ).slices
+
+  // ── filtered + sorted items ─────────────────────────────────────────────────
+
+  const filteredItems = selectedCat
+    ? itemsWithCat.filter(i => i.category.id === selectedCat)
+    : itemsWithCat
+
+  const sorted = [...filteredItems].sort((a, b) => {
     if (sortCol === 'name') {
       const cmp = a.name.localeCompare(b.name, 'he')
       return sortDir === 'asc' ? cmp : -cmp
@@ -102,17 +337,7 @@ export default function PurchaseAnalysis({
     return sortDir === 'asc' ? va - vb : vb - va
   })
 
-  // ── stats ───────────────────────────────────────────────────────────────────
-
-  const totalQty   = items.reduce((s, i) => s + Number(i.quantity), 0)
-  const calcTotal  = items.reduce((s, i) => s + Number(i.total_price ?? 0), 0)
-  const displayTotal = totalAmount ?? (calcTotal > 0 ? calcTotal : null)
-  const avgPerItem = items.length > 0 && displayTotal ? displayTotal / items.length : null
-
-  const top5 = [...items]
-    .filter(i => i.total_price !== null)
-    .sort((a, b) => Number(b.total_price) - Number(a.total_price))
-    .slice(0, 5)
+  const selectedSlice = pieSlices.find(s => s.category.id === selectedCat)
 
   // ── AI chat ─────────────────────────────────────────────────────────────────
 
@@ -172,8 +397,6 @@ export default function PurchaseAnalysis({
       : <ChevronDown className="w-3 h-3 text-primary-600 inline" />
   }
 
-  // ── header date ─────────────────────────────────────────────────────────────
-
   const headerDate = new Date(purchasedAt).toLocaleDateString('he-IL', {
     day: 'numeric', month: 'long',
   })
@@ -221,18 +444,24 @@ export default function PurchaseAnalysis({
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="px-4 py-4 space-y-4 pb-10 max-w-2xl mx-auto">
 
-            {/* ── Stats ── */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="card text-center py-3 px-2">
+            {/* ── Stats — now 4 cards with total ── */}
+            <div className="grid grid-cols-4 gap-2">
+              <div className="card text-center py-3 px-1">
+                <p className="text-xl font-extrabold text-primary-600 leading-tight">
+                  {displayTotal !== null ? fmt(displayTotal) : '—'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">סה"כ</p>
+              </div>
+              <div className="card text-center py-3 px-1">
                 <p className="text-2xl font-extrabold text-primary-600">{items.length}</p>
                 <p className="text-xs text-gray-400 mt-0.5">מוצרים</p>
               </div>
-              <div className="card text-center py-3 px-2">
+              <div className="card text-center py-3 px-1">
                 <p className="text-2xl font-extrabold text-primary-600">{totalQty}</p>
                 <p className="text-xs text-gray-400 mt-0.5">יחידות</p>
               </div>
-              <div className="card text-center py-3 px-2">
-                <p className="text-xl font-extrabold text-primary-600">{fmt(avgPerItem)}</p>
+              <div className="card text-center py-3 px-1">
+                <p className="text-lg font-extrabold text-primary-600 leading-tight">{fmt(avgPerItem)}</p>
                 <p className="text-xs text-gray-400 mt-0.5">ממוצע</p>
               </div>
             </div>
@@ -259,11 +488,103 @@ export default function PurchaseAnalysis({
               </div>
             )}
 
+            {/* ── Category Pie Chart ── */}
+            {pieSlices.length > 0 && (
+              <div className="card">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+                  חלוקה לקטגוריות
+                </p>
+
+                <div className="flex gap-4 items-start">
+                  {/* Pie */}
+                  <div className="flex-shrink-0 w-[130px]">
+                    <PieChart
+                      slices={pieSlices}
+                      selectedCat={selectedCat}
+                      onSelect={setSelectedCat}
+                    />
+                    {selectedCat && (
+                      <button
+                        onClick={() => setSelectedCat(null)}
+                        className="w-full text-center text-xs text-primary-500 hover:text-primary-700
+                                   font-semibold mt-1 transition-colors"
+                      >
+                        הצג הכל
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    {pieSlices.map(slice => {
+                      const isSel = selectedCat === slice.category.id
+                      return (
+                        <button
+                          key={slice.category.id}
+                          onClick={() => setSelectedCat(isSel ? null : slice.category.id)}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-right
+                                      transition-all ${isSel
+                                        ? 'bg-gray-100 ring-1 ring-gray-300'
+                                        : 'hover:bg-gray-50'
+                                      } ${selectedCat && !isSel ? 'opacity-40' : ''}`}
+                        >
+                          <div
+                            className="flex-shrink-0 w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: slice.category.color }}
+                          />
+                          <span className="text-xs">{slice.category.emoji}</span>
+                          <span className="flex-1 text-xs text-gray-700 font-medium truncate text-right">
+                            {slice.category.label}
+                          </span>
+                          <span className="text-xs font-bold text-gray-800 flex-shrink-0">
+                            {fmt(slice.total)}
+                          </span>
+                          <span
+                            className="text-xs font-semibold flex-shrink-0 w-9 text-left"
+                            style={{ color: slice.category.color }}
+                          >
+                            {slice.percent.toFixed(0)}%
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Selected category summary */}
+                {selectedSlice && (
+                  <div
+                    className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between"
+                  >
+                    <span className="text-sm font-bold text-gray-700">
+                      {selectedSlice.category.emoji} {selectedSlice.category.label}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold" style={{ color: selectedSlice.category.color }}>
+                        {fmt(selectedSlice.total)}
+                      </span>
+                      <span className="text-xs text-gray-400 font-semibold">
+                        {selectedSlice.percent.toFixed(1)}% מסך הקנייה
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Product table ── */}
             <div className="card overflow-hidden p-0">
               <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                <p className="text-sm font-bold text-gray-700">כל הפריטים</p>
-                <p className="text-xs text-gray-400">{items.length} מוצרים</p>
+                <p className="text-sm font-bold text-gray-700">
+                  {selectedSlice
+                    ? `${selectedSlice.category.emoji} ${selectedSlice.category.label}`
+                    : 'כל הפריטים'
+                  }
+                </p>
+                <p className="text-xs text-gray-400">
+                  {filteredItems.length} מוצרים
+                  {selectedSlice ? ` · ${fmt(selectedSlice.total)}` : ''}
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[320px]">
@@ -298,9 +619,15 @@ export default function PurchaseAnalysis({
                     {sorted.map(item => (
                       <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                         <td className="py-2.5 px-3">
-                          <p className="font-medium text-gray-800 leading-tight">{item.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="flex-shrink-0 w-1.5 h-1.5 rounded-full"
+                              style={{ backgroundColor: item.category.color }}
+                            />
+                            <p className="font-medium text-gray-800 leading-tight">{item.name}</p>
+                          </div>
                           {item.products?.barcode && (
-                            <p className="text-xs text-gray-400 font-mono mt-0.5">{item.products.barcode}</p>
+                            <p className="text-xs text-gray-400 font-mono mt-0.5 pr-3">{item.products.barcode}</p>
                           )}
                         </td>
                         <td className="py-2.5 px-2 text-center text-gray-600 text-xs">
@@ -352,7 +679,7 @@ export default function PurchaseAnalysis({
 
               {messages.length === 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {['מה היה המוצר היקר ביותר?', 'כמה הוצאתי על ירקות?', 'מה כדאי לקנות בפחות?'].map(q => (
+                  {['מה היה המוצר היקר ביותר?', 'מה המוצרים ב-5 המוצרים היקרים?', 'כמה הוצאתי על ירקות?'].map(q => (
                     <button
                       key={q}
                       onClick={() => setQuestion(q)}
