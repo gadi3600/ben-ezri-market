@@ -20,22 +20,16 @@ export default function FamilySetupPage() {
     setLoading(true)
     setError(null)
     try {
-      const { data: family, error: famErr } = await supabase
-        .from('families')
-        .insert({ name: familyName.trim() })
-        .select()
-        .single()
-      if (famErr) throw famErr
-
-      const { error: userErr } = await supabase
-        .from('users')
-        .update({ family_id: family.id, role: 'admin' })
-        .eq('id', session.user.id)
-      if (userErr) throw userErr
-
+      // SECURITY DEFINER RPC — עוקף RLS באופן מבוקר,
+      // יוצר משפחה ומעדכן את המשתמש ל-admin בפעולה אחת
+      const { error } = await supabase.rpc('create_family', {
+        family_name: familyName.trim(),
+      })
+      if (error) throw error
       await refreshProfile()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'שגיאה ביצירת המשפחה')
+      const msg = err instanceof Error ? err.message : 'שגיאה ביצירת המשפחה'
+      setError(msg.replace('ERROR: ', '').replace('SQLSTATE: P0001', '').trim())
     } finally {
       setLoading(false)
     }
@@ -46,23 +40,15 @@ export default function FamilySetupPage() {
     setLoading(true)
     setError(null)
     try {
-      const { data: family, error: famErr } = await supabase
-        .from('families')
-        .select('id')
-        .eq('invite_code', inviteCode.trim().toLowerCase())
-        .maybeSingle()
-      if (famErr) throw famErr
-      if (!family) throw new Error('קוד הזמנה לא נמצא — בדוק שוב')
-
-      const { error: userErr } = await supabase
-        .from('users')
-        .update({ family_id: family.id, role: 'member' })
-        .eq('id', session.user.id)
-      if (userErr) throw userErr
-
+      // SECURITY DEFINER RPC — מוצא משפחה לפי קוד ומצרף את המשתמש
+      const { error } = await supabase.rpc('join_family', {
+        p_invite_code: inviteCode.trim(),
+      })
+      if (error) throw error
       await refreshProfile()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'שגיאה בהצטרפות')
+      const msg = err instanceof Error ? err.message : 'שגיאה בהצטרפות'
+      setError(msg.replace('ERROR: ', '').replace('SQLSTATE: P0001', '').trim())
     } finally {
       setLoading(false)
     }
