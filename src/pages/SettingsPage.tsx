@@ -59,13 +59,8 @@ export default function SettingsPage() {
   }
 
   async function loadStores() {
-    if (!profile?.family_id) return
     const { data } = await supabase
-      .from('stores')
-      .select('*')
-      .or(`family_id.eq.${profile.family_id},family_id.is.null`)
-      .eq('is_active', true)
-      .order('name')
+      .from('stores').select('*').eq('is_active', true).order('name')
     if (data) setStores(data)
   }
 
@@ -75,7 +70,7 @@ export default function SettingsPage() {
     setStoreError(null)
     const { data, error } = await supabase
       .from('stores')
-      .insert({ name: newStoreName.trim(), family_id: profile.family_id, is_active: true })
+      .insert({ name: newStoreName.trim(), is_active: true })
       .select()
       .single()
     if (error) {
@@ -277,26 +272,20 @@ export default function SettingsPage() {
                   /* ── Normal row ── */
                   <>
                     <span className="flex-1 font-medium text-gray-700 text-sm">{s.name}</span>
-                    {s.family_id ? (
-                      <>
-                        <button
-                          onClick={() => startEditStore(s.id, s.name)}
-                          className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
-                          title="ערוך שם"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteStore(s.id, s.name)}
-                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-                          title="מחק"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-xs text-gray-300 flex-shrink-0">משותף</span>
-                    )}
+                    <button
+                      onClick={() => startEditStore(s.id, s.name)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
+                      title="ערוך שם"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteStore(s.id, s.name)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+                      title="מחק"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </>
                 )}
               </div>
