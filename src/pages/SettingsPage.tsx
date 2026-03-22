@@ -105,7 +105,7 @@ export default function SettingsPage() {
       .from('purchases')
       .select('id', { count: 'exact', head: true })
       .eq('store_id', id)
-    if ((count ?? 0) > 0) {
+    if (count !== null && count > 0) {
       alert(`לא ניתן למחוק את החנות כי יש ${count} קניות משויכות אליה`)
       return
     }
