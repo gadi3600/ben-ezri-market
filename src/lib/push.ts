@@ -12,40 +12,78 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export async function registerPushSubscription(userId: string, familyId: string): Promise<boolean> {
+  console.log('🔔 Push: starting registration...')
+
   if (!VAPID_PUBLIC_KEY) {
-    console.warn('Push: VITE_VAPID_PUBLIC_KEY not set, skipping')
+    console.warn('🔔 Push: VITE_VAPID_PUBLIC_KEY not set, skipping')
     return false
   }
+  console.log('🔔 Push: VAPID key found')
 
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.warn('Push: not supported in this browser')
+  if (!('serviceWorker' in navigator)) {
+    console.warn('🔔 Push: Service Worker not supported')
+    return false
+  }
+  if (!('PushManager' in window)) {
+    console.warn('🔔 Push: PushManager not supported')
+    return false
+  }
+  if (!('Notification' in window)) {
+    console.warn('🔔 Push: Notification API not supported')
+    return false
+  }
+  console.log('🔔 Push: browser supports push notifications')
+
+  // Check current permission state
+  const currentPermission = Notification.permission
+  console.log('🔔 Push: current permission =', currentPermission)
+
+  if (currentPermission === 'denied') {
+    console.warn('🔔 Push: notifications blocked by user. User needs to enable in browser settings.')
     return false
   }
 
   try {
     // Register the push service worker
+    console.log('🔔 Push: registering service worker...')
     const reg = await navigator.serviceWorker.register('/sw-push.js', { scope: '/' })
-    await navigator.serviceWorker.ready
+    console.log('🔔 Push: service worker registered, scope:', reg.scope)
 
-    // Request permission
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') {
-      console.log('Push: permission denied')
-      return false
+    await navigator.serviceWorker.ready
+    console.log('🔔 Push: service worker ready')
+
+    // Request permission if not yet granted
+    if (currentPermission === 'default') {
+      console.log('🔔 Push: requesting permission...')
+      const permission = await Notification.requestPermission()
+      console.log('🔔 Push: permission result =', permission)
+      if (permission !== 'granted') {
+        console.log('🔔 Push: user did not grant permission')
+        return false
+      }
     }
 
-    // Subscribe
+    // Subscribe to push
+    console.log('🔔 Push: checking existing subscription...')
     let subscription = await reg.pushManager.getSubscription()
-    if (!subscription) {
+
+    if (subscription) {
+      console.log('🔔 Push: existing subscription found')
+    } else {
+      console.log('🔔 Push: no subscription, creating new one...')
       subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
       })
+      console.log('🔔 Push: new subscription created')
     }
+
+    console.log('🔔 Push: subscription endpoint =', subscription.endpoint)
 
     // Save to Supabase (upsert by user_id)
     const subJson = subscription.toJSON()
-    await supabase.from('push_subscriptions').upsert(
+    console.log('🔔 Push: saving subscription to Supabase...')
+    const { error } = await supabase.from('push_subscriptions').upsert(
       {
         user_id:      userId,
         family_id:    familyId,
@@ -54,10 +92,15 @@ export async function registerPushSubscription(userId: string, familyId: string)
       { onConflict: 'user_id' },
     )
 
-    console.log('Push: registered successfully')
+    if (error) {
+      console.error('🔔 Push: failed to save subscription', error.message)
+      return false
+    }
+
+    console.log('🔔 Push: registered successfully ✅')
     return true
   } catch (err) {
-    console.error('Push: registration failed', err)
+    console.error('🔔 Push: registration failed', err)
     return false
   }
 }
@@ -68,7 +111,8 @@ export async function sendPushToFamily(
   body: string,
 ): Promise<void> {
   try {
-    await fetch(
+    console.log('🔔 Push: sending notification to family', familyId)
+    const res = await fetch(
       'https://lbeivhmaesgissghtzzh.supabase.co/functions/v1/send-push',
       {
         method: 'POST',
@@ -79,7 +123,9 @@ export async function sendPushToFamily(
         body: JSON.stringify({ family_id: familyId, title, body }),
       },
     )
+    const result = await res.json()
+    console.log('🔔 Push: send result', result)
   } catch (err) {
-    console.error('Push: send failed', err)
+    console.error('🔔 Push: send failed', err)
   }
 }
