@@ -48,7 +48,8 @@ function EditItemModal({
   const [note, setNote]     = useState(item.note ?? '')
   const [imageUrl, setImageUrl] = useState(item.image_url)
   const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const camRef = useRef<HTMLInputElement>(null)
+  const galRef = useRef<HTMLInputElement>(null)
 
   async function handleImageChange(file: File) {
     setUploading(true)
@@ -121,18 +122,10 @@ function EditItemModal({
             <Camera className="w-3.5 h-3.5 inline ml-1" />
             תמונה
           </label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={e => {
-              const f = e.target.files?.[0]
-              if (f) handleImageChange(f)
-              e.target.value = ''
-            }}
-          />
+          <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImageChange(f); e.target.value = '' }} />
+          <input ref={galRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImageChange(f); e.target.value = '' }} />
 
           {imageUrl ? (
             <div className="flex items-center gap-3 mb-5">
@@ -141,11 +134,18 @@ function EditItemModal({
               </button>
               <div className="flex gap-2">
                 <button
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => camRef.current?.click()}
                   className="text-xs text-primary-600 font-medium px-3 py-1.5 rounded-lg
                              bg-primary-50 hover:bg-primary-100 transition-colors"
                 >
-                  החלף
+                  📷 צלם
+                </button>
+                <button
+                  onClick={() => galRef.current?.click()}
+                  className="text-xs text-primary-600 font-medium px-3 py-1.5 rounded-lg
+                             bg-primary-50 hover:bg-primary-100 transition-colors"
+                >
+                  🖼️ גלריה
                 </button>
                 <button
                   onClick={() => setImageUrl(null)}
@@ -157,20 +157,32 @@ function EditItemModal({
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl w-full mb-5
-                         border-2 border-dashed border-gray-200 text-gray-400
-                         hover:border-primary-300 hover:text-primary-500 text-sm font-medium transition-colors"
-            >
-              {uploading ? (
-                <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Camera className="w-4 h-4" />
-              )}
-              {uploading ? 'מעלה...' : 'הוסף תמונה'}
-            </button>
+            <div className="flex gap-2 mb-5">
+              <button
+                onClick={() => camRef.current?.click()}
+                disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl
+                           border-2 border-dashed border-gray-200 text-gray-400
+                           hover:border-primary-300 hover:text-primary-500 text-sm font-medium transition-colors"
+              >
+                {uploading ? (
+                  <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>📷</span>
+                )}
+                צלם תמונה
+              </button>
+              <button
+                onClick={() => galRef.current?.click()}
+                disabled={uploading}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl
+                           border-2 border-dashed border-gray-200 text-gray-400
+                           hover:border-primary-300 hover:text-primary-500 text-sm font-medium transition-colors"
+              >
+                <span>🖼️</span>
+                מהגלריה
+              </button>
+            </div>
           )}
 
           {/* Save */}
@@ -287,9 +299,11 @@ export default function ListPage() {
   const [editingItem, setEditingItem]     = useState<ListItemWithUser | null>(null)
   const [lightboxSrc, setLightboxSrc]     = useState<string | null>(null)
 
-  const inputRef     = useRef<HTMLInputElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const addingRef    = useRef(false)
+  const inputRef       = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+  const addingRef      = useRef(false)
+  const [showImageMenu, setShowImageMenu] = useState(false)
 
   // Derive filtered suggestions from what user typed (max 5, case-insensitive)
   const suggestions = newName.trim().length > 0
@@ -560,12 +574,24 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* ── Hidden file input for camera/gallery ── */}
+      {/* ── Hidden file inputs: camera + gallery ── */}
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) setPendingImage(file)
+          e.target.value = ''
+          inputRef.current?.focus()
+        }}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
         className="hidden"
         onChange={e => {
           const file = e.target.files?.[0]
@@ -641,18 +667,46 @@ export default function ListPage() {
               </button>
             </div>
 
-            {/* Camera button */}
-            <button
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => fileInputRef.current?.click()}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl flex-shrink-0 transition-colors ${
-                pendingImage
-                  ? 'bg-primary-100 text-primary-600'
-                  : 'bg-gray-50 text-gray-400 hover:text-primary-500 hover:bg-primary-50'
-              }`}
-            >
-              <Camera className="w-5 h-5" />
-            </button>
+            {/* Camera/gallery button with menu */}
+            <div className="relative flex-shrink-0">
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => setShowImageMenu(v => !v)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${
+                  pendingImage
+                    ? 'bg-primary-100 text-primary-600'
+                    : 'bg-gray-50 text-gray-400 hover:text-primary-500 hover:bg-primary-50'
+                }`}
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+              {showImageMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowImageMenu(false)} />
+                  <div className="absolute bottom-12 left-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden w-44">
+                    <button
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { setShowImageMenu(false); cameraInputRef.current?.click() }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-gray-700 font-medium
+                                 hover:bg-primary-50 active:bg-primary-100 transition-colors"
+                    >
+                      <span>📷</span>
+                      <span>צלם תמונה</span>
+                    </button>
+                    <div className="border-t border-gray-50" />
+                    <button
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => { setShowImageMenu(false); galleryInputRef.current?.click() }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-gray-700 font-medium
+                                 hover:bg-primary-50 active:bg-primary-100 transition-colors"
+                    >
+                      <span>🖼️</span>
+                      <span>בחר מהגלריה</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Add button */}
             <button
