@@ -159,6 +159,7 @@ export default function SettingsPage() {
   }
 
   async function sendInvite() {
+    alert(`DEBUG sendInvite called!\nemail: "${newInviteEmail}"\nfamily_id: ${profile?.family_id ?? 'NULL'}\ninviting: ${inviting}\nrole: ${profile?.role ?? 'NULL'}`)
     if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
     setInviting(true)
 
