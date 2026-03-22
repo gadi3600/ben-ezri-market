@@ -81,9 +81,11 @@ export async function registerPushSubscription(userId: string, familyId: string)
     const existing = await reg.pushManager.getSubscription()
 
     if (existing) {
-      console.log('🔔 Push: existing subscription found')
-      subscription = existing
-    } else {
+      // Unsubscribe old subscription (might be from old VAPID key)
+      console.log('🔔 Push: unsubscribing old subscription...')
+      await existing.unsubscribe()
+    }
+    {
       console.log('🔔 Push: creating new subscription...')
       console.log('🔔 Push: VAPID key length =', VAPID_PUBLIC_KEY.length)
       subscription = await reg.pushManager.subscribe({
