@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Camera, DollarSign, X, Upload, CheckCircle2, Loader2, Plus } from 'lucide-react'
+import { DollarSign, X, Upload, CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -55,7 +55,8 @@ export default function ReceiptModal({
   const [error, setError]                     = useState<string | null>(null)
   const [skippedCount, setSkippedCount]       = useState(0)
   const [savedCount, setSavedCount]           = useState(0)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
   function addFiles(fl: FileList | null) {
     if (!fl) return
@@ -204,29 +205,39 @@ export default function ReceiptModal({
           {/* ── CHOOSE ── */}
           {step === 'choose' && (
             <div className="space-y-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl
-                           bg-primary-50 border-2 border-primary-200
-                           hover:bg-primary-100 active:bg-primary-200 transition-colors"
-              >
-                <div className="bg-primary-500 rounded-xl p-2.5 flex-shrink-0">
-                  <Camera className="w-5 h-5 text-white" />
-                </div>
-                <div className="text-right flex-1">
-                  <p className="font-bold text-primary-800">צרף חשבונית</p>
-                  <p className="text-xs text-primary-500">צלם או בחר מגלריה · אפשר מספר תמונות</p>
-                </div>
-              </button>
+              {/* Hidden inputs: camera + gallery */}
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
+                onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+              <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden"
+                onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={e => addFiles(e.target.files)}
-              />
+              {/* Two buttons: camera + gallery */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl
+                             bg-primary-50 border-2 border-primary-200
+                             hover:bg-primary-100 active:bg-primary-200 transition-colors"
+                >
+                  <span className="text-2xl">📷</span>
+                  <div className="text-center">
+                    <p className="font-bold text-primary-800 text-sm">צלם חשבונית</p>
+                    <p className="text-xs text-primary-500">פתח מצלמה</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl
+                             bg-gray-50 border-2 border-gray-200
+                             hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                >
+                  <span className="text-2xl">🖼️</span>
+                  <div className="text-center">
+                    <p className="font-bold text-gray-700 text-sm">בחר מהגלריה</p>
+                    <p className="text-xs text-gray-400">תמונה אחת או יותר</p>
+                  </div>
+                </button>
+              </div>
 
               {files.length > 0 && (
                 <div className="space-y-3">
@@ -249,14 +260,25 @@ export default function ReceiptModal({
                         </button>
                       </div>
                     ))}
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200
-                                 flex items-center justify-center text-gray-300 flex-shrink-0
-                                 hover:border-primary-300 hover:text-primary-400 transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
+                    {/* Add more button with menu */}
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="w-16 h-[30px] rounded-lg border-2 border-dashed border-gray-200
+                                   flex items-center justify-center text-gray-300
+                                   hover:border-primary-300 hover:text-primary-400 transition-colors text-xs"
+                      >
+                        📷
+                      </button>
+                      <button
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="w-16 h-[30px] rounded-lg border-2 border-dashed border-gray-200
+                                   flex items-center justify-center text-gray-300
+                                   hover:border-primary-300 hover:text-primary-400 transition-colors text-xs"
+                      >
+                        🖼️
+                      </button>
+                    </div>
                   </div>
 
                   <button onClick={handleUpload} className="btn-primary w-full">
