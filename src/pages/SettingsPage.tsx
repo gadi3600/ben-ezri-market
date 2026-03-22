@@ -136,6 +136,28 @@ export default function SettingsPage() {
     return `${base}/join?token=${inviteId}&role=${role}`
   }
 
+  function copyToClipboard(text: string) {
+    // Try modern API first
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text))
+      return
+    }
+    fallbackCopy(text)
+  }
+
+  function fallbackCopy(text: string) {
+    const el = document.createElement('textarea')
+    el.value = text
+    el.style.position = 'fixed'
+    el.style.left = '-9999px'
+    el.style.top = '-9999px'
+    document.body.appendChild(el)
+    el.focus()
+    el.select()
+    try { document.execCommand('copy') } catch { /* ignore */ }
+    document.body.removeChild(el)
+  }
+
   async function sendInvite() {
     if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
     setInviting(true)
@@ -155,7 +177,7 @@ export default function SettingsPage() {
       alert(`שגיאה מסופאבייס:\ncode: ${error.code}\nmessage: ${error.message}\ndetails: ${error.details ?? 'none'}\nhint: ${error.hint ?? 'none'}`)
     } else if (data) {
       const link = inviteLink(data.id, newInviteRole)
-      await navigator.clipboard.writeText(link).catch(() => {})
+      copyToClipboard(link)
       alert(`הזמנה נוצרה בהצלחה!\n\nלינק:\n${link}`)
       setNewInviteEmail('')
       await loadInvites(profile.family_id)
@@ -167,7 +189,7 @@ export default function SettingsPage() {
 
   async function copyInviteLink(inv: { id: string; role: Role }) {
     const link = inviteLink(inv.id, inv.role)
-    await navigator.clipboard.writeText(link).catch(() => {})
+    copyToClipboard(link)
     setCopiedInviteId(inv.id)
     setTimeout(() => setCopiedInviteId(null), 2000)
   }
@@ -256,7 +278,7 @@ export default function SettingsPage() {
 
   function copyInviteCode() {
     if (!family?.invite_code) return
-    navigator.clipboard.writeText(family.invite_code).catch(() => {})
+    copyToClipboard(family.invite_code)
     setCodeCopied(true)
     setTimeout(() => setCodeCopied(false), 2500)
   }
