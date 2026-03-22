@@ -70,17 +70,24 @@ export default function SettingsPage() {
   async function checkPushStatus() {
     if (!profile) return
     try {
+      // Check both: DB subscription exists AND browser permission granted
       const { data, error } = await supabase
         .from('push_subscriptions')
         .select('id')
         .eq('user_id', profile.id)
         .maybeSingle()
+
       if (error) {
         console.warn('checkPushStatus error:', error.message)
         setPushEnabled(false)
         return
       }
-      setPushEnabled(!!data)
+
+      const hasDbSubscription = !!data
+      const hasBrowserPermission = 'Notification' in window && Notification.permission === 'granted'
+
+      console.log('checkPushStatus:', { hasDbSubscription, hasBrowserPermission, userId: profile.id })
+      setPushEnabled(hasDbSubscription && hasBrowserPermission)
     } catch {
       setPushEnabled(false)
     }
