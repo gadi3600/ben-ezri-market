@@ -51,6 +51,7 @@ export interface ListItem {
   added_by: string | null
   checked_by: string | null
   checked_at: string | null
+  image_url: string | null
   created_at: string
   updated_at: string
 }

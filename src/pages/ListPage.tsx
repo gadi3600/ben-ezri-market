@@ -1,8 +1,22 @@
-import { useState, useEffect, useRef } from 'react'
-import { Plus, Trash2, ShoppingBag, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem } from '../lib/types'
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function uploadItemImage(file: File, familyId: string, listId: string): Promise<string | null> {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+  const name = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const path = `${familyId}/${listId}/${name}`
+  const { error } = await supabase.storage
+    .from('list-item-images')
+    .upload(path, file, { upsert: false })
+  if (error) { console.error('Image upload failed:', error.message); return null }
+  const { data } = supabase.storage.from('list-item-images').getPublicUrl(path)
+  return data?.publicUrl ?? null
+}
 
 // ── Item row ────────────────────────────────────────────────────────────────
 
@@ -32,6 +46,15 @@ function ItemRow({
       >
         {item.is_checked && <span className="text-[11px] font-extrabold">✓</span>}
       </button>
+
+      {/* Thumbnail */}
+      {item.image_url && (
+        <img
+          src={item.image_url}
+          alt=""
+          className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-gray-100"
+        />
+      )}
 
       {/* Name + qty */}
       <div className="flex-1 min-w-0">
@@ -67,12 +90,16 @@ export default function ListPage() {
   const [list, setList]           = useState<ShoppingList | null>(null)
   const [items, setItems]         = useState<ListItem[]>([])
   const [newName, setNewName]     = useState('')
-  const [newQty, setNewQty]       = useState('1')
+  const [newQty, setNewQty]       = useState(1)
   const [loading, setLoading]     = useState(true)
-  const addingRef = useRef(false)
   const [creatingList, setCreatingList] = useState(false)
   const [allSuggestions, setAllSuggestions] = useState<string[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [dupError, setDupError]   = useState<string | null>(null)
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
+
+  const inputRef     = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const addingRef    = useRef(false)
 
   // Derive filtered suggestions from what user typed (max 5, case-insensitive)
   const suggestions = newName.trim().length > 0
@@ -97,7 +124,10 @@ export default function ListPage() {
         { event: '*', schema: 'public', table: 'list_items', filter: `list_id=eq.${list.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setItems(prev => [...prev, payload.new as ListItem])
+            setItems(prev => {
+              if (prev.some(i => i.id === payload.new.id)) return prev
+              return [...prev, payload.new as ListItem]
+            })
           } else if (payload.eventType === 'UPDATE') {
             setItems(prev => prev.map(i => (i.id === payload.new.id ? (payload.new as ListItem) : i)))
           } else if (payload.eventType === 'DELETE') {
@@ -153,38 +183,64 @@ export default function ListPage() {
       .single()
     if (data) { setList(data); setItems([]) }
     setCreatingList(false)
-    setTimeout(() => inputRef.current?.focus(), 200)
+    inputRef.current?.focus()
   }
 
-  async function addItem() {
-    if (!newName.trim() || !list || addingRef.current) return
-    addingRef.current = true
-    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) : 0
+  const addItem = useCallback(async () => {
+    if (!newName.trim() || !list || addingRef.current || !profile) return
+
     const trimmedName = newName.trim()
-    const qty = parseFloat(newQty) || 1
+
+    // Duplicate check
+    const exists = items.some(i => i.name.trim().toLowerCase() === trimmedName.toLowerCase())
+    if (exists) {
+      setDupError('הפריט כבר קיים ברשימה')
+      setTimeout(() => setDupError(null), 3000)
+      inputRef.current?.focus()
+      return
+    }
+
+    addingRef.current = true
+    setDupError(null)
+
+    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) : 0
+    const qty = newQty
+    const imageFile = pendingImage
+
+    // Clear inputs immediately — keeps keyboard up
     setNewName('')
-    setNewQty('1')
+    setNewQty(1)
+    setPendingImage(null)
+
+    // Upload image if attached
+    let imageUrl: string | null = null
+    if (imageFile && profile.family_id) {
+      imageUrl = await uploadItemImage(imageFile, profile.family_id, list.id)
+    }
+
     const { data } = await supabase.from('list_items').insert({
-      list_id:   list.id,
-      name:      trimmedName,
-      quantity:  qty,
-      unit:      'יחידה',
-      added_by:  profile!.id,
+      list_id:    list.id,
+      name:       trimmedName,
+      quantity:   qty,
+      unit:       'יחידה',
+      added_by:   profile.id,
       sort_order: maxOrder + 1,
+      image_url:  imageUrl,
     }).select().single()
+
     if (data) {
       setItems(prev => {
         if (prev.some(i => i.id === data.id)) return prev
         return [...prev, data]
       })
-      // Add newly added name to suggestions for immediate reuse
       setAllSuggestions(prev =>
         prev.includes(trimmedName) ? prev : [...prev, trimmedName]
       )
     }
+
     addingRef.current = false
-    setTimeout(() => inputRef.current?.focus(), 100)
-  }
+    inputRef.current?.focus()
+  }, [newName, newQty, pendingImage, list, items, profile])
 
   async function toggleItem(item: ListItem) {
     const now = new Date().toISOString()
@@ -316,39 +372,111 @@ export default function ListPage() {
         </div>
       )}
 
+      {/* ── Hidden file input for camera/gallery ── */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) setPendingImage(file)
+          e.target.value = ''
+          inputRef.current?.focus()
+        }}
+      />
+
       {/* ── Add-item bar (sticky above bottom nav) ── */}
-      <div className="fixed bottom-[64px] inset-x-0 bg-white/95 backdrop-blur border-t border-gray-100 shadow-lg px-4 py-3">
-        <div className="max-w-2xl mx-auto flex gap-2">
-          {/* Qty */}
-          <input
-            type="number"
-            value={newQty}
-            onChange={e => setNewQty(e.target.value)}
-            className="input w-16 text-center px-1 text-sm"
-            min="0.5"
-            step="0.5"
-          />
-          {/* Name */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addItem()}
-            className="input flex-1"
-            placeholder="הוסף מוצר..."
-            autoComplete="off"
-          />
-          {/* Add button */}
-          <button
-            onClick={addItem}
-            disabled={!newName.trim()}
-            className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:opacity-40
-                       text-white rounded-xl w-12 h-12 flex items-center justify-center flex-shrink-0
-                       transition-colors shadow-sm"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
+      <div className="fixed bottom-[64px] inset-x-0 bg-white/95 backdrop-blur border-t border-gray-100 shadow-lg px-4 py-3 z-20">
+        <div className="max-w-2xl mx-auto space-y-2">
+
+          {/* Duplicate error */}
+          {dupError && (
+            <p className="text-xs text-red-500 font-medium text-center">{dupError}</p>
+          )}
+
+          {/* Pending image preview */}
+          {pendingImage && (
+            <div className="flex items-center gap-2">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                <img
+                  src={URL.createObjectURL(pendingImage)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute -top-0.5 -right-0.5 bg-black/60 rounded-full p-0.5"
+                >
+                  <Plus className="w-3 h-3 text-white rotate-45" />
+                </button>
+              </div>
+              <span className="text-xs text-gray-400 truncate">{pendingImage.name}</span>
+            </div>
+          )}
+
+          <div className="flex gap-2 items-center">
+            {/* Qty controls */}
+            <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 flex-shrink-0">
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => setNewQty(q => Math.max(1, q - 1))}
+                className="w-8 h-10 flex items-center justify-center text-gray-400
+                           hover:text-primary-600 active:bg-gray-100 transition-colors rounded-r-xl"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className="w-8 text-center text-sm font-bold text-gray-700 select-none">
+                {newQty}
+              </span>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => setNewQty(q => q + 1)}
+                className="w-8 h-10 flex items-center justify-center text-gray-400
+                           hover:text-primary-600 active:bg-gray-100 transition-colors rounded-l-xl"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Camera button */}
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl flex-shrink-0 transition-colors ${
+                pendingImage
+                  ? 'bg-primary-100 text-primary-600'
+                  : 'bg-gray-50 text-gray-400 hover:text-primary-500 hover:bg-primary-50'
+              }`}
+            >
+              <Camera className="w-5 h-5" />
+            </button>
+
+            {/* Name */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={newName}
+              onChange={e => { setNewName(e.target.value); setDupError(null) }}
+              onKeyDown={e => e.key === 'Enter' && addItem()}
+              className="input flex-1"
+              placeholder="הוסף מוצר..."
+              autoComplete="off"
+            />
+
+            {/* Add button */}
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={addItem}
+              disabled={!newName.trim()}
+              className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:opacity-40
+                         text-white rounded-xl w-12 h-12 flex items-center justify-center flex-shrink-0
+                         transition-colors shadow-sm"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
