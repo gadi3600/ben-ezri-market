@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { registerPushSubscription, sendPushToFamily } from '../lib/push'
 import type { ShoppingList, ListItem } from '../lib/types'
 
 // Extended item with joined user info
@@ -318,6 +319,7 @@ export default function ListPage() {
     if (!profile?.family_id) return
     loadList()
     loadSuggestions()
+    registerPushSubscription(profile.id, profile.family_id)
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime subscription
@@ -448,6 +450,15 @@ export default function ListPage() {
       setAllSuggestions(prev =>
         prev.includes(trimmedName) ? prev : [...prev, trimmedName]
       )
+
+      // Send push notification to family
+      if (profile.family_id) {
+        sendPushToFamily(
+          profile.family_id,
+          'בן עזרי מרקט 🛒',
+          `${profile.full_name} הוסיף "${trimmedName}" לרשימה`,
+        )
+      }
     }
 
     addingRef.current = false
