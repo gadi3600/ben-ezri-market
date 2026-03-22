@@ -3,17 +3,6 @@ import { DollarSign, X, Upload, CheckCircle2, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function fileHash(file: File): Promise<string> {
-  const buf = await file.arrayBuffer()
-  const hash = await crypto.subtle.digest('SHA-256', buf)
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, 16)
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Step = 'choose' | 'manual' | 'uploading' | 'analyzing' | 'result'
@@ -70,12 +59,6 @@ export default function ReceiptModal({
     setError(null)
 
     try {
-      // List existing files for this purchase — used for duplicate detection
-      const { data: existingFiles } = await supabase.storage
-        .from('receipts')
-        .list(`${profile.family_id}/${purchaseId}`)
-      const existingNames = new Set((existingFiles ?? []).map(f => f.name))
-
       // Determine starting page number
       const { data: existingRecords } = await supabase
         .from('purchase_receipts')
@@ -86,19 +69,12 @@ export default function ReceiptModal({
       const maxPage = existingRecords?.[0]?.page_number ?? 0
 
       const paths: string[] = []
-      let skipped = 0
 
-      for (const file of files) {
+      for (let idx = 0; idx < files.length; idx++) {
+        const file = files[idx]
         const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-        const hash = await fileHash(file)
-
-        // Skip duplicates (same hash = same content)
-        if ([...existingNames].some(n => n.startsWith(hash))) {
-          skipped++
-          continue
-        }
-
-        const path = `${profile.family_id}/${purchaseId}/${hash}.${ext}`
+        const name = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+        const path = `${profile.family_id}/${purchaseId}/${name}`
 
         const { error: uploadErr } = await supabase.storage
           .from('receipts')
@@ -113,20 +89,14 @@ export default function ReceiptModal({
         })
 
         paths.push(path)
-        existingNames.add(`${hash}.${ext}`) // block within-batch duplicates
       }
 
-      console.log(`📤 Upload complete: ${paths.length} uploaded, ${skipped} skipped, ${files.length} total files`)
+      console.log(`📤 Upload complete: ${paths.length} uploaded, ${files.length} total files`)
 
-      setSkippedCount(skipped)
+      setSkippedCount(0)
       setSavedCount(paths.length)
 
       if (paths.length === 0) {
-        setError(
-          skipped === 1
-            ? 'התמונה כבר קיימת — לא הועלה דבר חדש'
-            : `כל ${skipped} התמונות כבר קיימות`,
-        )
         setStep('choose')
         return
       }
