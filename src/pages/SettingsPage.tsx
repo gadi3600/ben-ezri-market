@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
-import { User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown, Plus, Trash2, Loader2 } from 'lucide-react'
+import {
+  User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown,
+  Plus, Trash2, Loader2, Pencil, X, CheckCircle2,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Family, UserProfile, Store } from '../lib/types'
@@ -29,9 +32,15 @@ export default function SettingsPage() {
   const [editName, setEditName]     = useState('')
   const [savingName, setSavingName] = useState(false)
   const [nameSaved, setNameSaved]   = useState(false)
+
+  // Add store
   const [newStoreName, setNewStoreName] = useState('')
   const [addingStore, setAddingStore]   = useState(false)
   const [storeError, setStoreError]     = useState<string | null>(null)
+
+  // Inline edit store
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
+  const [editStoreName, setEditStoreName]   = useState('')
 
   useEffect(() => {
     if (!profile) return
@@ -51,7 +60,6 @@ export default function SettingsPage() {
 
   async function loadStores() {
     if (!profile?.family_id) return
-    // Load family-specific stores AND global stores (family_id IS NULL)
     const { data } = await supabase
       .from('stores')
       .select('*')
@@ -79,11 +87,30 @@ export default function SettingsPage() {
     setAddingStore(false)
   }
 
-  async function deleteStore(id: string) {
-    const store = stores.find(s => s.id === id)
-    // Only delete family-owned stores; global stores (family_id=null) are read-only
-    if (!store?.family_id) return
-    if (!confirm(`למחוק את "${store.name}"?`)) return
+  function startEditStore(id: string, name: string) {
+    setEditingStoreId(id)
+    setEditStoreName(name)
+  }
+
+  async function saveEditStore(id: string) {
+    const trimmed = editStoreName.trim()
+    if (!trimmed) return
+    const { error } = await supabase
+      .from('stores')
+      .update({ name: trimmed })
+      .eq('id', id)
+    if (!error) {
+      setStores(prev =>
+        prev
+          .map(s => s.id === id ? { ...s, name: trimmed } : s)
+          .sort((a, b) => a.name.localeCompare(b.name, 'he')),
+      )
+      setEditingStoreId(null)
+    }
+  }
+
+  async function deleteStore(id: string, name: string) {
+    if (!confirm(`למחוק את "${name}"?`)) return
     const { error } = await supabase.from('stores').delete().eq('id', id)
     if (!error) setStores(prev => prev.filter(s => s.id !== id))
   }
@@ -208,7 +235,7 @@ export default function SettingsPage() {
           </button>
         </div>
         {storeError && (
-          <p className="text-xs text-red-500 mb-3 px-1">{storeError}</p>
+          <p className="text-xs text-red-500 mb-2 px-1">{storeError}</p>
         )}
 
         {/* Store list */}
@@ -217,18 +244,60 @@ export default function SettingsPage() {
         ) : (
           <div className="divide-y divide-gray-50 mt-3">
             {stores.map(s => (
-              <div key={s.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                <div className="w-2.5 h-2.5 rounded-full bg-primary-400 flex-shrink-0" />
-                <span className="flex-1 font-medium text-gray-700">{s.name}</span>
-                {s.family_id ? (
-                  <button
-                    onClick={() => deleteStore(s.id)}
-                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+              <div key={s.id} className="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
+                <div className="w-2 h-2 rounded-full bg-primary-400 flex-shrink-0" />
+
+                {editingStoreId === s.id ? (
+                  /* ── Inline edit row ── */
+                  <>
+                    <input
+                      autoFocus
+                      value={editStoreName}
+                      onChange={e => setEditStoreName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter')  saveEditStore(s.id)
+                        if (e.key === 'Escape') setEditingStoreId(null)
+                      }}
+                      className="input flex-1 text-sm py-1.5"
+                    />
+                    <button
+                      onClick={() => saveEditStore(s.id)}
+                      className="p-1.5 rounded-lg text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingStoreId(null)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
                 ) : (
-                  <span className="text-xs text-gray-300">משותף</span>
+                  /* ── Normal row ── */
+                  <>
+                    <span className="flex-1 font-medium text-gray-700 text-sm">{s.name}</span>
+                    {s.family_id ? (
+                      <>
+                        <button
+                          onClick={() => startEditStore(s.id, s.name)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
+                          title="ערוך שם"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => deleteStore(s.id, s.name)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+                          title="מחק"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-gray-300 flex-shrink-0">משותף</span>
+                    )}
+                  </>
                 )}
               </div>
             ))}

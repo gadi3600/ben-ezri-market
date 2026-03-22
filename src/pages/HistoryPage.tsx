@@ -259,9 +259,9 @@ export default function HistoryPage() {
   const [editingAmount, setEditingAmount] = useState<string | null>(null)
   const [editAmount, setEditAmount]       = useState('')
 
-  // Store editing
-  const [editingStore, setEditingStore] = useState<string | null>(null)
-  const [stores, setStores]             = useState<StoreOption[]>([])
+  // Store picker
+  const [storePickerFor, setStorePickerFor] = useState<PurchaseRow | null>(null)
+  const [stores, setStores]                 = useState<StoreOption[]>([])
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -326,13 +326,14 @@ export default function HistoryPage() {
     const { data } = await supabase
       .from('stores')
       .select('id, name')
-      .eq('family_id', profile!.family_id)
+      .or(`family_id.eq.${profile!.family_id},family_id.is.null`)
+      .eq('is_active', true)
       .order('name')
     if (data) setStores(data as StoreOption[])
   }
 
   async function updateStore(purchaseId: string, storeId: string, storeName: string) {
-    setEditingStore(null)
+    setStorePickerFor(null)
     setPurchases(prev => prev.map(p =>
       p.id === purchaseId ? { ...p, store_id: storeId, stores: { name: storeName } } : p,
     ))
@@ -406,8 +407,49 @@ export default function HistoryPage() {
         />
       )}
 
-      {editingStore && (
-        <div className="fixed inset-0 z-10" onClick={() => setEditingStore(null)} />
+      {/* ── Store picker bottom sheet ── */}
+      {storePickerFor && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setStorePickerFor(null)} />
+          <div className="relative bg-white rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col">
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-200" />
+            </div>
+            <div className="px-5 pb-2 flex-shrink-0">
+              <h3 className="text-lg font-extrabold text-gray-800">בחר חנות</h3>
+            </div>
+            <div className="overflow-y-auto px-5 pb-8">
+              {stores.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">
+                  אין חנויות — הוסף ב"הגדרות"
+                </p>
+              ) : (
+                <div className="space-y-1 pt-2">
+                  {stores.map(s => {
+                    const sv = storeVisual(s.name)
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => updateStore(storePickerFor.id, s.id, s.name)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-colors ${
+                          storePickerFor.store_id === s.id
+                            ? 'bg-primary-100 text-primary-700 font-bold'
+                            : 'hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <span className="text-xl">{sv.emoji}</span>
+                        <span className="flex-1 text-right">{s.name}</span>
+                        {storePickerFor.store_id === s.id && (
+                          <CheckCircle2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="space-y-3 pb-32">
@@ -430,35 +472,16 @@ export default function HistoryPage() {
             <div key={purchase.id} className="card">
               {/* Store + amount row */}
               <div className="flex items-center justify-between mb-2">
-                <div className="relative">
-                  <button
-                    onClick={() => setEditingStore(editingStore === purchase.id ? null : purchase.id)}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg} active:opacity-70 transition-opacity`}
-                  >
-                    <span className="text-base">{v.emoji}</span>
-                    <span className={`text-sm font-bold ${v.text}`}>
-                      {purchase.stores?.name ?? 'ללא חנות'}
-                    </span>
-                    <ChevronDown className={`w-3 h-3 ${v.text} opacity-60 transition-transform ${editingStore === purchase.id ? 'rotate-180' : ''}`} />
-                  </button>
-                  {editingStore === purchase.id && (
-                    <div className="absolute top-full right-0 mt-1 z-20 bg-white rounded-2xl shadow-xl border border-gray-100 min-w-[160px] overflow-hidden">
-                      {stores.length === 0 ? (
-                        <p className="text-center text-gray-400 text-xs py-4 px-3">אין חנויות מוגדרות</p>
-                      ) : stores.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => updateStore(purchase.id, s.id, s.name)}
-                          className={`w-full text-right px-4 py-3 text-sm font-medium hover:bg-primary-50 transition-colors ${
-                            purchase.store_id === s.id ? 'text-primary-700 font-bold bg-primary-50' : 'text-gray-700'
-                          }`}
-                        >
-                          {s.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <button
+                  onClick={() => setStorePickerFor(purchase)}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg} active:opacity-70 transition-opacity`}
+                >
+                  <span className="text-base">{v.emoji}</span>
+                  <span className={`text-sm font-bold ${v.text}`}>
+                    {purchase.stores?.name ?? 'ללא חנות'}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 ${v.text} opacity-60`} />
+                </button>
 
                 {/* Amount + edit */}
                 <div className="flex items-center gap-1.5">
