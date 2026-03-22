@@ -724,31 +724,73 @@ export default function ShopPage() {
       })
   }, [active.length, profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── custom sort order + category overrides (localStorage) ──
-  const [customOrder, setCustomOrder] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('shopItemOrder')
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
-  const [catOverrides, setCatOverrides] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem('shopCatOverrides')
-      return saved ? JSON.parse(saved) : {}
-    } catch { return {} }
-  })
+  // ── custom sort order + category overrides (synced to DB) ──
+  const [customOrder, setCustomOrder] = useState<string[]>([])
+  const [catOverrides, setCatOverrides] = useState<Record<string, string>>({})
+  const [orderLoaded, setOrderLoaded] = useState(false)
+  const savingRef = useRef(false) // prevent save loop from realtime
 
-  // Save to localStorage
+  // Load order data from DB
   useEffect(() => {
-    if (customOrder.length > 0) {
-      localStorage.setItem('shopItemOrder', JSON.stringify(customOrder))
-    }
-  }, [customOrder])
+    if (!profile?.family_id) return
+    supabase
+      .from('shopping_order')
+      .select('type, order_data')
+      .eq('family_id', profile.family_id)
+      .in('type', ['customOrder', 'catOverrides', 'catOrder'])
+      .then(({ data }) => {
+        for (const row of data ?? []) {
+          if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
+          if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
+          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data)
+        }
+        setOrderLoaded(true)
+      })
+  }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save helper — upsert to DB
+  function saveOrderToDB(type: string, data: unknown) {
+    if (!profile?.family_id) return
+    savingRef.current = true
+    supabase.from('shopping_order').upsert({
+      family_id:  profile.family_id,
+      type,
+      order_data: data,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'family_id,type' }).then(() => {
+      setTimeout(() => { savingRef.current = false }, 500)
+    })
+  }
+
+  // Save to DB on change
   useEffect(() => {
-    if (Object.keys(catOverrides).length > 0) {
-      localStorage.setItem('shopCatOverrides', JSON.stringify(catOverrides))
-    }
-  }, [catOverrides])
+    if (!orderLoaded) return
+    saveOrderToDB('customOrder', customOrder)
+  }, [customOrder]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!orderLoaded) return
+    saveOrderToDB('catOverrides', catOverrides)
+  }, [catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Realtime sync — listen for changes from other users
+  useEffect(() => {
+    if (!profile?.family_id) return
+    const ch = supabase
+      .channel('shopping-order-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shopping_order', filter: `family_id=eq.${profile.family_id}` },
+        (payload) => {
+          if (savingRef.current) return // ignore our own saves
+          const row = payload.new as { type: string; order_data: unknown }
+          if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
+          if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
+          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data)
+        },
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get effective category: local override → DB saved → auto-classify
   function getItemCategory(item: ListItemWithUser): Category {
@@ -857,7 +899,7 @@ export default function ShopPage() {
   // ── search ──
   const [searchQuery, setSearchQuery] = useState('')
 
-  // ── collapse state (localStorage) ──
+  // ── collapse state (local only — personal preference) ──
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('shopCollapsedCats')
@@ -865,13 +907,8 @@ export default function ShopPage() {
     } catch { return new Set() }
   })
 
-  // ── category order (localStorage) ──
-  const [catOrder, setCatOrder] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('shopCatOrder')
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
-  })
+  // ── category order (synced to DB) ──
+  const [catOrder, setCatOrder] = useState<string[]>([])
 
   useEffect(() => {
     if (collapsedCats.size > 0) localStorage.setItem('shopCollapsedCats', JSON.stringify([...collapsedCats]))
@@ -879,9 +916,9 @@ export default function ShopPage() {
   }, [collapsedCats])
 
   useEffect(() => {
-    if (catOrder.length > 0) localStorage.setItem('shopCatOrder', JSON.stringify(catOrder))
-    else localStorage.removeItem('shopCatOrder')
-  }, [catOrder])
+    if (!orderLoaded) return
+    saveOrderToDB('catOrder', catOrder)
+  }, [catOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply custom category order to groupedActive
   const sortedGroups = useMemo(() => {
@@ -931,10 +968,11 @@ export default function ShopPage() {
     setCatOverrides({})
     setCatOrder([])
     setCollapsedCats(new Set())
-    localStorage.removeItem('shopItemOrder')
-    localStorage.removeItem('shopCatOverrides')
-    localStorage.removeItem('shopCatOrder')
     localStorage.removeItem('shopCollapsedCats')
+    // DB cleanup
+    if (profile?.family_id) {
+      supabase.from('shopping_order').delete().eq('family_id', profile.family_id)
+    }
   }
 
   // ════════════════════════════════════════
