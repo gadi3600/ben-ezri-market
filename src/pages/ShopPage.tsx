@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
 import { canEdit } from '../lib/permissions'
-import { classifyItem, CATEGORY_ORDER } from '../lib/categories'
+import { classifyItem, CATEGORY_ORDER, CAT, OTHER } from '../lib/categories'
 import type { Category } from '../lib/categories'
 import ReceiptModal from '../components/ReceiptModal'
 import ImageLightbox from '../components/ImageLightbox'
@@ -674,70 +674,77 @@ export default function ShopPage() {
   const pct       = total > 0 ? Math.round((checked.length / total) * 100) : 0
   const v = selectedStore ? storeVisual(selectedStore.name) : null
 
-  // ── custom sort order (localStorage) ──
+  // ── custom sort order + category overrides (localStorage) ──
   const [customOrder, setCustomOrder] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('shopItemOrder')
       return saved ? JSON.parse(saved) : []
     } catch { return [] }
   })
+  const [catOverrides, setCatOverrides] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('shopCatOverrides')
+      return saved ? JSON.parse(saved) : {}
+    } catch { return {} }
+  })
 
-  // Save order to localStorage when it changes
+  // Save to localStorage
   useEffect(() => {
     if (customOrder.length > 0) {
       localStorage.setItem('shopItemOrder', JSON.stringify(customOrder))
     }
   }, [customOrder])
+  useEffect(() => {
+    if (Object.keys(catOverrides).length > 0) {
+      localStorage.setItem('shopCatOverrides', JSON.stringify(catOverrides))
+    }
+  }, [catOverrides])
 
-  // Default category-sorted flat list (used when no custom order)
+  // Get effective category for an item (override or auto-classify)
+  function getItemCategory(item: ListItemWithUser): Category {
+    const overrideId = catOverrides[item.id]
+    if (overrideId) {
+      const allCats = { ...CAT, other: OTHER }
+      return allCats[overrideId as keyof typeof allCats] ?? classifyItem(item.name)
+    }
+    return classifyItem(item.name)
+  }
+
+  // Default category-sorted flat list
   const defaultSorted = useMemo(() => {
     return [...active].sort((a, b) => {
-      const catA = CATEGORY_ORDER.indexOf(classifyItem(a.name).id)
-      const catB = CATEGORY_ORDER.indexOf(classifyItem(b.name).id)
+      const catA = CATEGORY_ORDER.indexOf(getItemCategory(a).id)
+      const catB = CATEGORY_ORDER.indexOf(getItemCategory(b).id)
       return catA - catB
     })
-  }, [active])
+  }, [active, catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Flat sorted list: custom order if exists, otherwise default category sort
-  // Dedup by id to prevent duplicates from stale data
+  // Flat sorted list
   const flatActive = useMemo(() => {
     const seen = new Set<string>()
     function dedup(arr: ListItemWithUser[]) {
-      return arr.filter(i => {
-        if (seen.has(i.id)) return false
-        seen.add(i.id)
-        return true
-      })
+      return arr.filter(i => { if (seen.has(i.id)) return false; seen.add(i.id); return true })
     }
     if (customOrder.length === 0) return dedup(defaultSorted)
     const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
-    const sorted = [...active].sort((a, b) => {
-      const oA = orderMap.get(a.id) ?? 9999
-      const oB = orderMap.get(b.id) ?? 9999
-      return oA - oB
-    })
-    return dedup(sorted)
+    return dedup([...active].sort((a, b) => (orderMap.get(a.id) ?? 9999) - (orderMap.get(b.id) ?? 9999)))
   }, [active, customOrder, defaultSorted])
 
-  // Group flat list by unique category (each category appears once)
-  // Category order = position of its first item in flatActive
+  // Group by unique category (using overrides)
   const groupedActive = useMemo(() => {
     const catMap = new Map<string, { category: Category; items: ListItemWithUser[]; firstIdx: number }>()
     flatActive.forEach((item, idx) => {
-      const cat = classifyItem(item.name)
+      const cat = getItemCategory(item)
       if (!catMap.has(cat.id)) {
         catMap.set(cat.id, { category: cat, items: [], firstIdx: idx })
       }
       catMap.get(cat.id)!.items.push(item)
     })
-    // Sort categories by position of their first item
     return [...catMap.values()].sort((a, b) => a.firstIdx - b.firstIdx)
-  }, [flatActive])
+  }, [flatActive, catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Build display-order list: items ordered by category groups then within group
-  const displayOrder = useMemo(() => {
-    return groupedActive.flatMap(g => g.items)
-  }, [groupedActive])
+  // Display order: categories then items within each
+  const displayOrder = useMemo(() => groupedActive.flatMap(g => g.items), [groupedActive])
 
   function moveItem(itemId: string, direction: 'up' | 'down') {
     const ids = displayOrder.map(i => i.id)
@@ -745,6 +752,16 @@ export default function ShopPage() {
     if (idx < 0) return
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= ids.length) return
+
+    // Set category override: moved item takes the category of the item it swaps with
+    const neighborItem = displayOrder[swapIdx]
+    const neighborCat = getItemCategory(neighborItem).id
+    const movedItem = displayOrder[idx]
+    const movedCat = getItemCategory(movedItem).id
+    if (neighborCat !== movedCat) {
+      setCatOverrides(prev => ({ ...prev, [itemId]: neighborCat }))
+    }
+
     ;[ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]]
     setCustomOrder(ids)
   }
@@ -753,13 +770,24 @@ export default function ShopPage() {
     const ids = displayOrder.map(i => i.id)
     const fromIdx = ids.indexOf(itemId)
     if (fromIdx < 0 || targetIdx < 0 || targetIdx >= ids.length) return
+
+    // Set category override from target position's neighbor
+    const targetItem = displayOrder[targetIdx]
+    const targetCat = getItemCategory(targetItem).id
+    const movedCat = getItemCategory(displayOrder[fromIdx]).id
+    if (targetCat !== movedCat) {
+      setCatOverrides(prev => ({ ...prev, [itemId]: targetCat }))
+    }
+
     ;[ids[fromIdx], ids[targetIdx]] = [ids[targetIdx], ids[fromIdx]]
     setCustomOrder(ids)
   }
 
   function resetOrder() {
     setCustomOrder([])
+    setCatOverrides({})
     localStorage.removeItem('shopItemOrder')
+    localStorage.removeItem('shopCatOverrides')
   }
 
   // ════════════════════════════════════════
