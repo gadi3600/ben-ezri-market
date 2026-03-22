@@ -17,8 +17,8 @@ export async function registerPushSubscription(userId: string, familyId: string)
   if (Notification.permission === 'denied') return false
 
   try {
-    const reg = await navigator.serviceWorker.register('/sw-push.js', { scope: '/' })
-    await navigator.serviceWorker.ready
+    // Use the PWA service worker (already registered by vite-plugin-pwa)
+    const reg = await navigator.serviceWorker.ready
 
     if (Notification.permission === 'default') {
       const permission = await Notification.requestPermission()
