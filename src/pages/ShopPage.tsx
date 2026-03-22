@@ -743,19 +743,63 @@ export default function ShopPage() {
     return [...catMap.values()].sort((a, b) => a.firstIdx - b.firstIdx)
   }, [flatActive])
 
+  // Build display-order list: items ordered by category groups then within group
+  const displayOrder = useMemo(() => {
+    return groupedActive.flatMap(g => g.items)
+  }, [groupedActive])
+
   function moveItem(itemId: string, direction: 'up' | 'down') {
-    const currentIds = flatActive.map(i => i.id)
-    const idx = currentIds.indexOf(itemId)
-    if (idx < 0) return
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= currentIds.length) return
-    ;[currentIds[idx], currentIds[swapIdx]] = [currentIds[swapIdx], currentIds[idx]]
-    setCustomOrder(currentIds)
+    // Find which category group this item is in
+    let groupIdx = -1, itemIdx = -1
+    for (let g = 0; g < groupedActive.length; g++) {
+      const i = groupedActive[g].items.findIndex(it => it.id === itemId)
+      if (i >= 0) { groupIdx = g; itemIdx = i; break }
+    }
+    if (groupIdx < 0) return
+
+    const group = groupedActive[groupIdx]
+
+    if (direction === 'up') {
+      if (itemIdx > 0) {
+        // Move up within same category
+        const newGroupItems = [...group.items]
+        ;[newGroupItems[itemIdx], newGroupItems[itemIdx - 1]] = [newGroupItems[itemIdx - 1], newGroupItems[itemIdx]]
+        const newOrder = groupedActive.flatMap((g, gi) => gi === groupIdx ? newGroupItems.map(i => i.id) : g.items.map(i => i.id))
+        setCustomOrder(newOrder)
+      } else if (groupIdx > 0) {
+        // Move to end of previous category group
+        const prevGroup = groupedActive[groupIdx - 1]
+        const newOrder = groupedActive.flatMap((g, gi) => {
+          if (gi === groupIdx - 1) return [...prevGroup.items.map(i => i.id), itemId]
+          if (gi === groupIdx) return group.items.filter(i => i.id !== itemId).map(i => i.id)
+          return g.items.map(i => i.id)
+        }).filter(Boolean)
+        setCustomOrder(newOrder)
+      }
+    } else {
+      if (itemIdx < group.items.length - 1) {
+        // Move down within same category
+        const newGroupItems = [...group.items]
+        ;[newGroupItems[itemIdx], newGroupItems[itemIdx + 1]] = [newGroupItems[itemIdx + 1], newGroupItems[itemIdx]]
+        const newOrder = groupedActive.flatMap((g, gi) => gi === groupIdx ? newGroupItems.map(i => i.id) : g.items.map(i => i.id))
+        setCustomOrder(newOrder)
+      } else if (groupIdx < groupedActive.length - 1) {
+        // Move to start of next category group
+        const nextGroup = groupedActive[groupIdx + 1]
+        const newOrder = groupedActive.flatMap((g, gi) => {
+          if (gi === groupIdx) return group.items.filter(i => i.id !== itemId).map(i => i.id)
+          if (gi === groupIdx + 1) return [itemId, ...nextGroup.items.map(i => i.id)]
+          return g.items.map(i => i.id)
+        }).filter(Boolean)
+        setCustomOrder(newOrder)
+      }
+    }
   }
 
-  function moveItemTo(itemId: string, targetIdx: number) {
-    const currentIds = flatActive.map(i => i.id)
-    const fromIdx = currentIds.indexOf(itemId)
+  function moveItemTo(_itemId: string, targetIdx: number) {
+    // Use displayOrder for position-based swap
+    const currentIds = displayOrder.map(i => i.id)
+    const fromIdx = currentIds.indexOf(_itemId)
     if (fromIdx < 0 || targetIdx < 0 || targetIdx >= currentIds.length) return
     ;[currentIds[fromIdx], currentIds[targetIdx]] = [currentIds[targetIdx], currentIds[fromIdx]]
     setCustomOrder(currentIds)
@@ -930,13 +974,13 @@ export default function ShopPage() {
                 </div>
                 <div className="space-y-1.5">
                   {group.items.map(item => {
-                    const flatIdx = flatActive.indexOf(item)
+                    const dispIdx = displayOrder.indexOf(item)
                     return (
                       <ActiveItem
                         key={item.id} item={item}
                         readOnly={!canEdit(profile!.role)}
-                        index={flatIdx}
-                        total={flatActive.length}
+                        index={dispIdx}
+                        total={displayOrder.length}
                         onCheck={checkItem} onDefer={deferItem}
                         onTap={setDetailItem}
                         onMoveUp={() => moveItem(item.id, 'up')}
