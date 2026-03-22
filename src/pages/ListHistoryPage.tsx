@@ -42,6 +42,17 @@ interface DetailItem {
   note: string | null
 }
 
+interface PurchaseItemInfo {
+  name: string
+  purchases: {
+    purchased_at: string
+    stores: { name: string }[] | { name: string } | null
+  }[] | {
+    purchased_at: string
+    stores: { name: string }[] | { name: string } | null
+  } | null
+}
+
 // ── Color helper ──────────────────────────────────────────────────────────────
 
 const USER_COLORS = [
@@ -75,6 +86,8 @@ function ListDetailModal({
   const [selected, setSelected]   = useState<Set<string>>(new Set())
   const [loading, setLoading]     = useState(true)
   const [importing, setImporting] = useState(false)
+  // Map item name (lowercase) → purchase info
+  const [purchaseInfo, setPurchaseInfo] = useState<Record<string, { store: string; date: string }>>({})
 
   useEffect(() => {
     loadItems()
@@ -90,6 +103,34 @@ function ListDetailModal({
     const rows = (data as DetailItem[]) ?? []
     setItems(rows)
     setSelected(new Set(rows.map(i => i.id)))
+
+    // Load purchase history for these item names
+    if (rows.length > 0) {
+      const names = [...new Set(rows.map(r => r.name))]
+      const { data: piData } = await supabase
+        .from('purchase_items')
+        .select('name, purchases(purchased_at, stores(name))')
+        .in('name', names)
+        .order('created_at', { ascending: false })
+
+      const info: Record<string, { store: string; date: string }> = {}
+      for (const row of (piData ?? []) as unknown as PurchaseItemInfo[]) {
+        const key = row.name.trim().toLowerCase()
+        if (info[key]) continue // keep most recent
+        const purchase = Array.isArray(row.purchases) ? row.purchases[0] : row.purchases
+        if (!purchase) continue
+        const store = Array.isArray(purchase.stores) ? purchase.stores[0] : purchase.stores
+        if (!store?.name) continue
+        info[key] = {
+          store: store.name,
+          date: new Date(purchase.purchased_at).toLocaleDateString('he-IL', {
+            day: 'numeric', month: 'short',
+          }),
+        }
+      }
+      setPurchaseInfo(info)
+    }
+
     setLoading(false)
   }
 
@@ -165,6 +206,7 @@ function ListDetailModal({
 
             {items.map(item => {
               const isSel = selected.has(item.id)
+              const pInfo = purchaseInfo[item.name.trim().toLowerCase()]
               return (
                 <button
                   key={item.id}
@@ -182,9 +224,14 @@ function ListDetailModal({
                     {isSel && <CheckCircle2 className="w-3.5 h-3.5" />}
                   </div>
 
-                  {/* Name */}
+                  {/* Name + purchase info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                    {pInfo && (
+                      <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                        🏪 נרכש ב{pInfo.store} · {pInfo.date}
+                      </p>
+                    )}
                     {item.note && (
                       <p className="text-xs text-gray-400 truncate mt-0.5">📝 {item.note}</p>
                     )}
