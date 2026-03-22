@@ -320,8 +320,12 @@ export default function ListPage() {
     if (!profile?.family_id) return
     loadList()
     loadSuggestions()
-    // Show push banner only if permission not yet decided
-    if ('Notification' in window && Notification.permission === 'default') {
+    // Show push banner only if permission not yet decided and not dismissed
+    if (
+      'Notification' in window &&
+      Notification.permission === 'default' &&
+      localStorage.getItem('pushBannerDismissed') !== 'true'
+    ) {
       setShowPushBanner(true)
     }
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -329,7 +333,13 @@ export default function ListPage() {
   async function handleEnablePush() {
     if (!profile?.family_id) return
     setShowPushBanner(false)
-    await registerPushSubscription(profile.id, profile.family_id)
+    const ok = await registerPushSubscription(profile.id, profile.family_id)
+    if (ok) localStorage.setItem('pushBannerDismissed', 'true')
+  }
+
+  function handleDismissPush() {
+    setShowPushBanner(false)
+    localStorage.setItem('pushBannerDismissed', 'true')
   }
 
   // Realtime subscription
@@ -554,7 +564,7 @@ export default function ListPage() {
               אפשר
             </button>
             <button
-              onClick={() => setShowPushBanner(false)}
+              onClick={handleDismissPush}
               className="text-xs text-amber-400 hover:text-amber-600 px-1 transition-colors"
             >
               <X className="w-4 h-4" />

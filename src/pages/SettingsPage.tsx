@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import {
   User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown,
-  Plus, Trash2, Loader2, Pencil, X, CheckCircle2,
+  Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { registerPushSubscription } from '../lib/push'
 import type { Family, UserProfile, Store } from '../lib/types'
 
 // ── Section wrapper — defined OUTSIDE component so React never remounts it ────
@@ -42,12 +43,49 @@ export default function SettingsPage() {
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
   const [editStoreName, setEditStoreName]   = useState('')
 
+  // Push notifications
+  const [pushEnabled, setPushEnabled]     = useState(false)
+  const [pushLoading, setPushLoading]     = useState(false)
+
   useEffect(() => {
     if (!profile) return
     setEditName(profile.full_name)
     if (profile.family_id) loadFamilyData(profile.family_id)
     loadStores()
+    checkPushStatus()
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function checkPushStatus() {
+    if (!profile) return
+    const { data } = await supabase
+      .from('push_subscriptions')
+      .select('id')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    setPushEnabled(!!data)
+  }
+
+  async function togglePush() {
+    if (!profile?.family_id) return
+    setPushLoading(true)
+
+    if (pushEnabled) {
+      // Disable: delete subscription from Supabase
+      await supabase.from('push_subscriptions').delete().eq('user_id', profile.id)
+      // Clear localStorage so banner shows again next time
+      localStorage.removeItem('pushBannerDismissed')
+      setPushEnabled(false)
+    } else {
+      // Enable: register push
+      const ok = await registerPushSubscription(profile.id, profile.family_id)
+      if (ok) {
+        setPushEnabled(true)
+        localStorage.setItem('pushBannerDismissed', 'true')
+      }
+    }
+
+    setPushLoading(false)
+  }
 
   async function loadFamilyData(familyId: string) {
     const [{ data: fam }, { data: mems }] = await Promise.all([
@@ -295,6 +333,34 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+        )}
+      </Section>
+
+      {/* ── Notifications ── */}
+      <Section icon={<Bell className="w-5 h-5 text-primary-600" />} title="התראות">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-700">התראות על פריטים חדשים ברשימה</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {pushEnabled ? 'תקבל התראה כשבני המשפחה מוסיפים פריטים' : 'התראות כבויות'}
+            </p>
+          </div>
+          <button
+            onClick={togglePush}
+            disabled={pushLoading}
+            className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${
+              pushEnabled ? 'bg-primary-500' : 'bg-gray-300'
+            } ${pushLoading ? 'opacity-60' : ''}`}
+          >
+            <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all ${
+              pushEnabled ? 'left-[22px]' : 'left-0.5'
+            }`} />
+          </button>
+        </div>
+        {'Notification' in window && Notification.permission === 'denied' && (
+          <p className="text-xs text-red-500 mt-3">
+            ההתראות חסומות בדפדפן. יש לאפשר אותן בהגדרות הדפדפן.
+          </p>
         )}
       </Section>
 
