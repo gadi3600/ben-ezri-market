@@ -682,12 +682,21 @@ export default function ShopPage() {
     } catch { return [] }
   })
 
-  // Save order to localStorage when it changes
+  // Save order to localStorage when it changes, and clean stale IDs
   useEffect(() => {
     if (customOrder.length > 0) {
-      localStorage.setItem('shopItemOrder', JSON.stringify(customOrder))
+      const activeIds = new Set(active.map(i => i.id))
+      const cleaned = customOrder.filter(id => activeIds.has(id))
+      // Add any new items not in custom order
+      for (const item of active) {
+        if (!cleaned.includes(item.id)) cleaned.push(item.id)
+      }
+      if (cleaned.length !== customOrder.length || cleaned.some((id, i) => id !== customOrder[i])) {
+        setCustomOrder(cleaned)
+      }
+      localStorage.setItem('shopItemOrder', JSON.stringify(cleaned))
     }
-  }, [customOrder])
+  }, [customOrder, active]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Default category-sorted flat list (used when no custom order)
   const defaultSorted = useMemo(() => {
@@ -699,14 +708,24 @@ export default function ShopPage() {
   }, [active])
 
   // Flat sorted list: custom order if exists, otherwise default category sort
+  // Dedup by id to prevent duplicates from stale data
   const flatActive = useMemo(() => {
-    if (customOrder.length === 0) return defaultSorted
+    const seen = new Set<string>()
+    function dedup(arr: ListItemWithUser[]) {
+      return arr.filter(i => {
+        if (seen.has(i.id)) return false
+        seen.add(i.id)
+        return true
+      })
+    }
+    if (customOrder.length === 0) return dedup(defaultSorted)
     const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
-    return [...active].sort((a, b) => {
+    const sorted = [...active].sort((a, b) => {
       const oA = orderMap.get(a.id) ?? 9999
       const oB = orderMap.get(b.id) ?? 9999
       return oA - oB
     })
+    return dedup(sorted)
   }, [active, customOrder, defaultSorted])
 
   // Group flat list into consecutive category sections (for display only)
