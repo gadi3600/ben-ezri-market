@@ -256,6 +256,7 @@ function ActiveItem({
   onTap,
   onMoveUp,
   onMoveDown,
+  onMoveTo,
 }: {
   item: ListItemWithUser
   readOnly?: boolean
@@ -266,32 +267,65 @@ function ActiveItem({
   onTap: (item: ListItemWithUser) => void
   onMoveUp: () => void
   onMoveDown: () => void
+  onMoveTo: (targetIdx: number) => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
   const user = item.added_by_user
   const initial = user?.full_name?.charAt(0) ?? ''
   const color = item.added_by ? userColor(item.added_by) : 'bg-gray-100 text-gray-400'
+  const [editingPos, setEditingPos] = useState(false)
+  const [posValue, setPosValue] = useState('')
+
+  function handlePosSubmit() {
+    const target = parseInt(posValue, 10) - 1
+    if (!isNaN(target) && target >= 0 && target < total && target !== index) {
+      onMoveTo(target)
+    }
+    setEditingPos(false)
+  }
 
   return (
     <div className="flex items-center gap-2 bg-white rounded-2xl px-3 py-3
                     shadow-sm border border-gray-100">
-      {/* Move arrows */}
-      <div className="flex flex-col gap-0.5 flex-shrink-0">
+      {/* Position number + arrows */}
+      <div className="flex flex-col items-center gap-0 flex-shrink-0 w-8">
         <button
           onClick={onMoveUp}
           disabled={index === 0}
-          className="w-6 h-6 rounded flex items-center justify-center
+          className="w-6 h-5 rounded flex items-center justify-center
                      text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
         >
-          <MoveUp className="w-3.5 h-3.5" />
+          <MoveUp className="w-3 h-3" />
         </button>
+        {editingPos ? (
+          <input
+            type="number"
+            value={posValue}
+            onChange={e => setPosValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handlePosSubmit(); if (e.key === 'Escape') setEditingPos(false) }}
+            onBlur={handlePosSubmit}
+            className="w-8 h-5 text-center text-xs font-bold border border-primary-300 rounded bg-primary-50
+                       focus:outline-none"
+            autoFocus
+            min={1}
+            max={total}
+          />
+        ) : (
+          <button
+            onClick={() => { setPosValue(String(index + 1)); setEditingPos(true) }}
+            className="w-6 h-5 text-[10px] font-bold text-gray-400 hover:text-primary-600
+                       hover:bg-primary-50 rounded transition-colors"
+          >
+            {index + 1}
+          </button>
+        )}
         <button
           onClick={onMoveDown}
           disabled={index === total - 1}
-          className="w-6 h-6 rounded flex items-center justify-center
+          className="w-6 h-5 rounded flex items-center justify-center
                      text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
         >
-          <MoveDown className="w-3.5 h-3.5" />
+          <MoveDown className="w-3 h-3" />
         </button>
       </div>
 
@@ -695,10 +729,21 @@ export default function ShopPage() {
     if (idx < 0) return
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= flatActive.length) return
+    moveItemTo(itemId, swapIdx)
+  }
 
+  function moveItemTo(itemId: string, targetIdx: number) {
     const newOrder = flatActive.map(i => i.id)
-    ;[newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]]
+    const fromIdx = newOrder.indexOf(itemId)
+    if (fromIdx < 0 || targetIdx < 0 || targetIdx >= newOrder.length) return
+    // Swap the two items
+    ;[newOrder[fromIdx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[fromIdx]]
     setCustomOrder(newOrder)
+  }
+
+  function resetOrder() {
+    setCustomOrder([])
+    localStorage.removeItem('shopItemOrder')
   }
 
   // ════════════════════════════════════════
@@ -839,6 +884,19 @@ export default function ShopPage() {
           </div>
         </div>
 
+        {/* ── Reset order button ── */}
+        {active.length > 0 && customOrder.length > 0 && (
+          <div className="flex justify-end mb-1">
+            <button
+              onClick={resetOrder}
+              className="text-xs text-gray-400 hover:text-primary-600 font-medium
+                         px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
+            >
+              ↺ איפוס סדר
+            </button>
+          </div>
+        )}
+
         {/* ── Active items grouped by category ── */}
         {active.length > 0 ? (
           <div className="space-y-3">
@@ -863,6 +921,7 @@ export default function ShopPage() {
                         onTap={setDetailItem}
                         onMoveUp={() => moveItem(item.id, 'up')}
                         onMoveDown={() => moveItem(item.id, 'down')}
+                        onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
                       />
                     )
                   })}
