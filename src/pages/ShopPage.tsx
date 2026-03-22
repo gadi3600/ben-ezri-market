@@ -667,6 +667,19 @@ export default function ShopPage() {
       }
     }
 
+    // 4. Save item categories to DB for future sessions
+    const catRows = items
+      .filter(i => i.is_checked || i.is_deferred)
+      .map(item => ({
+        name:       item.name,
+        category:   getItemCategory(item).id,
+        family_id:  profile.family_id,
+        updated_at: new Date().toISOString(),
+      }))
+    if (catRows.length > 0) {
+      await supabase.from('item_categories').upsert(catRows, { onConflict: 'name' })
+    }
+
     setCompleting(false)
     setShowReceiptModal(true) // Show receipt modal before done screen
   }
@@ -688,6 +701,27 @@ export default function ShopPage() {
   const allDone   = total > 0 && active.length === 0
   const pct       = total > 0 ? Math.round((checked.length / total) * 100) : 0
   const v = selectedStore ? storeVisual(selectedStore.name) : null
+
+  // ── saved categories from DB (name → category) ──
+  const [savedCats, setSavedCats] = useState<Record<string, string>>({})
+
+  // Load saved categories from DB when items load
+  useEffect(() => {
+    if (!profile?.family_id || active.length === 0) return
+    const names = [...new Set(active.map(i => i.name))]
+    supabase
+      .from('item_categories')
+      .select('name, category')
+      .eq('family_id', profile.family_id)
+      .in('name', names)
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {}
+          for (const r of data) map[r.name] = r.category
+          setSavedCats(map)
+        }
+      })
+  }, [active.length, profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── custom sort order + category overrides (localStorage) ──
   const [customOrder, setCustomOrder] = useState<string[]>(() => {
@@ -715,13 +749,16 @@ export default function ShopPage() {
     }
   }, [catOverrides])
 
-  // Get effective category for an item (override or auto-classify)
+  // Get effective category: local override → DB saved → auto-classify
   function getItemCategory(item: ListItemWithUser): Category {
+    const allCats: Record<string, Category> = { ...CAT, other: OTHER }
+    // 1. Local override (current session)
     const overrideId = catOverrides[item.id]
-    if (overrideId) {
-      const allCats = { ...CAT, other: OTHER }
-      return allCats[overrideId as keyof typeof allCats] ?? classifyItem(item.name)
-    }
+    if (overrideId && allCats[overrideId]) return allCats[overrideId]
+    // 2. Saved from DB (from previous shopping sessions)
+    const savedId = savedCats[item.name]
+    if (savedId && allCats[savedId]) return allCats[savedId]
+    // 3. Auto-classify by name
     return classifyItem(item.name)
   }
 
@@ -800,9 +837,19 @@ export default function ShopPage() {
 
   function changeItemCategory(itemId: string, newCatId: string) {
     setCatOverrides(prev => ({ ...prev, [itemId]: newCatId }))
-    // If no custom order yet, initialize from current display order
     if (customOrder.length === 0) {
       setCustomOrder(displayOrder.map(i => i.id))
+    }
+    // Save to DB for future sessions
+    const item = items.find(i => i.id === itemId)
+    if (item && profile?.family_id) {
+      supabase.from('item_categories').upsert({
+        name:       item.name,
+        category:   newCatId,
+        family_id:  profile.family_id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'name' })
+      setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
     }
   }
 
