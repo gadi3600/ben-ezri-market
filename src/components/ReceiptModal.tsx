@@ -45,12 +45,25 @@ export default function ReceiptModal({
   const [skippedCount, setSkippedCount]       = useState(0)
   const [savedCount, setSavedCount]           = useState(0)
   const [analyzedCount, setAnalyzedCount]     = useState(0)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
 
   function addFiles(fl: FileList | null) {
     if (!fl) return
     setFiles(prev => [...prev, ...Array.from(fl)])
+  }
+
+  function handleCamera() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.setAttribute('capture', 'environment')
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files
+      if (files?.length) setFiles(prev => [...prev, ...Array.from(files)])
+    }
+    document.body.appendChild(input)
+    input.click()
+    setTimeout(() => document.body.removeChild(input), 1000)
   }
 
   async function handleUpload() {
@@ -180,16 +193,14 @@ export default function ReceiptModal({
           {/* ── CHOOSE ── */}
           {step === 'choose' && (
             <div className="space-y-3">
-              {/* Hidden inputs: camera + gallery */}
-              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
-                onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+              {/* Hidden input: gallery only */}
               <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden"
                 onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
 
               {/* Two buttons: camera + gallery */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={() => handleCamera()}
                   className="flex-1 flex flex-col items-center gap-2 p-4 rounded-2xl
                              bg-primary-50 border-2 border-primary-200
                              hover:bg-primary-100 active:bg-primary-200 transition-colors"
@@ -238,7 +249,7 @@ export default function ReceiptModal({
                     {/* Add more button with menu */}
                     <div className="flex flex-col gap-1">
                       <button
-                        onClick={() => cameraInputRef.current?.click()}
+                        onClick={() => handleCamera()}
                         className="w-16 h-[30px] rounded-lg border-2 border-dashed border-gray-200
                                    flex items-center justify-center text-gray-300
                                    hover:border-primary-300 hover:text-primary-400 transition-colors text-xs"
