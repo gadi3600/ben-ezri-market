@@ -307,6 +307,7 @@ export default function ListPage() {
   const galleryInputRef = useRef<HTMLInputElement>(null)
   const addingRef      = useRef(false)
   const [showImageMenu, setShowImageMenu] = useState(false)
+  const [showPushBanner, setShowPushBanner] = useState(false)
 
   // Derive filtered suggestions from what user typed (max 5, case-insensitive)
   const suggestions = newName.trim().length > 0
@@ -319,8 +320,17 @@ export default function ListPage() {
     if (!profile?.family_id) return
     loadList()
     loadSuggestions()
-    registerPushSubscription(profile.id, profile.family_id)
+    // Show push banner only if permission not yet decided
+    if ('Notification' in window && Notification.permission === 'default') {
+      setShowPushBanner(true)
+    }
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleEnablePush() {
+    if (!profile?.family_id) return
+    setShowPushBanner(false)
+    await registerPushSubscription(profile.id, profile.family_id)
+  }
 
   // Realtime subscription
   useEffect(() => {
@@ -524,6 +534,33 @@ export default function ListPage() {
           onClose={() => setEditingItem(null)}
           onLightbox={src => { setEditingItem(null); setLightboxSrc(src) }}
         />
+      )}
+
+      {/* Push notification banner */}
+      {showPushBanner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
+          <span className="text-2xl flex-shrink-0">🔔</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-800">
+              אפשר התראות כדי לדעת כשבני המשפחה מוסיפים פריטים
+            </p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              onClick={handleEnablePush}
+              className="text-xs font-bold text-white bg-amber-500 hover:bg-amber-600
+                         active:bg-amber-700 px-3 py-1.5 rounded-xl transition-colors"
+            >
+              אפשר
+            </button>
+            <button
+              onClick={() => setShowPushBanner(false)}
+              className="text-xs text-amber-400 hover:text-amber-600 px-1 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Header card */}
