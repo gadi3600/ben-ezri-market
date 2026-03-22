@@ -15,74 +15,95 @@ export async function registerPushSubscription(userId: string, familyId: string)
   console.log('🔔 Push: starting registration...')
 
   if (!VAPID_PUBLIC_KEY) {
-    console.warn('🔔 Push: VITE_VAPID_PUBLIC_KEY not set, skipping')
+    alert('שגיאה: VAPID key לא מוגדר. בדוק את קובץ .env')
     return false
   }
-  console.log('🔔 Push: VAPID key found')
 
   if (!('serviceWorker' in navigator)) {
-    console.warn('🔔 Push: Service Worker not supported')
+    alert('שגיאה: הדפדפן לא תומך ב-Service Worker')
     return false
   }
   if (!('PushManager' in window)) {
-    console.warn('🔔 Push: PushManager not supported')
+    alert('שגיאה: הדפדפן לא תומך בהתראות Push')
     return false
   }
   if (!('Notification' in window)) {
-    console.warn('🔔 Push: Notification API not supported')
+    alert('שגיאה: הדפדפן לא תומך ב-Notification API')
     return false
   }
   console.log('🔔 Push: browser supports push notifications')
 
-  // Check current permission state
   const currentPermission = Notification.permission
   console.log('🔔 Push: current permission =', currentPermission)
 
   if (currentPermission === 'denied') {
-    console.warn('🔔 Push: notifications blocked by user. User needs to enable in browser settings.')
+    alert('ההתראות חסומות בדפדפן. יש לאפשר אותן בהגדרות הדפדפן ולנסות שוב.')
     return false
   }
 
+  // Step 1: Register service worker
+  let reg: ServiceWorkerRegistration
   try {
-    // Register the push service worker
     console.log('🔔 Push: registering service worker...')
-    const reg = await navigator.serviceWorker.register('/sw-push.js', { scope: '/' })
+    reg = await navigator.serviceWorker.register('/sw-push.js', { scope: '/' })
     console.log('🔔 Push: service worker registered, scope:', reg.scope)
-
     await navigator.serviceWorker.ready
     console.log('🔔 Push: service worker ready')
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('🔔 Push: SW registration failed', err)
+    alert(`שגיאה ברישום Service Worker:\n${msg}`)
+    return false
+  }
 
-    // Request permission if not yet granted
-    if (currentPermission === 'default') {
+  // Step 2: Request permission
+  if (currentPermission === 'default') {
+    try {
       console.log('🔔 Push: requesting permission...')
       const permission = await Notification.requestPermission()
       console.log('🔔 Push: permission result =', permission)
       if (permission !== 'granted') {
-        console.log('🔔 Push: user did not grant permission')
+        alert('לא אושרה הרשאה להתראות')
         return false
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('🔔 Push: permission request failed', err)
+      alert(`שגיאה בבקשת הרשאה:\n${msg}`)
+      return false
     }
+  }
 
-    // Subscribe to push
+  // Step 3: Subscribe to PushManager
+  let subscription: PushSubscription
+  try {
     console.log('🔔 Push: checking existing subscription...')
-    let subscription = await reg.pushManager.getSubscription()
+    const existing = await reg.pushManager.getSubscription()
 
-    if (subscription) {
+    if (existing) {
       console.log('🔔 Push: existing subscription found')
+      subscription = existing
     } else {
-      console.log('🔔 Push: no subscription, creating new one...')
+      console.log('🔔 Push: creating new subscription...')
+      console.log('🔔 Push: VAPID key length =', VAPID_PUBLIC_KEY.length)
       subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
       })
       console.log('🔔 Push: new subscription created')
     }
+    console.log('🔔 Push: endpoint =', subscription.endpoint)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('🔔 Push: subscribe failed', err)
+    alert(`שגיאה בהרשמה ל-Push:\n${msg}`)
+    return false
+  }
 
-    console.log('🔔 Push: subscription endpoint =', subscription.endpoint)
-
-    // Save to Supabase (upsert by user_id)
+  // Step 4: Save to Supabase
+  try {
     const subJson = subscription.toJSON()
-    console.log('🔔 Push: saving subscription to Supabase...')
+    console.log('🔔 Push: saving to Supabase...', JSON.stringify(subJson).slice(0, 100))
     const { error } = await supabase.from('push_subscriptions').upsert(
       {
         user_id:      userId,
@@ -93,14 +114,18 @@ export async function registerPushSubscription(userId: string, familyId: string)
     )
 
     if (error) {
-      console.error('🔔 Push: failed to save subscription', error.message)
+      console.error('🔔 Push: Supabase error', error)
+      alert(`שגיאה בשמירה לסופאבייס:\n${error.message}\n\nהאם טבלת push_subscriptions קיימת?`)
       return false
     }
 
     console.log('🔔 Push: registered successfully ✅')
+    alert('התראות הופעלו בהצלחה! ✅')
     return true
   } catch (err) {
-    console.error('🔔 Push: registration failed', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('🔔 Push: save failed', err)
+    alert(`שגיאה בשמירה:\n${msg}`)
     return false
   }
 }
