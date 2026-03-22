@@ -30,27 +30,36 @@ export default function JoinPage() {
 
   async function loadInvite(inviteId: string) {
     setLoadingInvite(true)
-    const { data } = await supabase
+
+    // First fetch invite without join (simpler, avoids FK issues)
+    const { data, error } = await supabase
       .from('invites')
-      .select('email, role, family_id, families(name)')
+      .select('email, role, family_id')
       .eq('id', inviteId)
       .maybeSingle()
 
-    if (!data) {
+    if (error || !data) {
+      console.error('loadInvite error:', error, 'data:', data)
       setInvalidInvite(true)
       setLoadingInvite(false)
       return
     }
 
-    const families = data.families as unknown
-    const familyName = Array.isArray(families)
-      ? (families[0] as { name: string })?.name
-      : (families as { name: string } | null)?.name
+    // Fetch family name separately
+    let familyName = 'משפחה'
+    if (data.family_id) {
+      const { data: fam } = await supabase
+        .from('families')
+        .select('name')
+        .eq('id', data.family_id)
+        .maybeSingle()
+      if (fam?.name) familyName = fam.name
+    }
 
     setInvite({
       email: data.email,
       role: data.role as Role,
-      family_name: familyName ?? 'משפחה',
+      family_name: familyName,
     })
     setEmail(data.email)
     setLoadingInvite(false)
