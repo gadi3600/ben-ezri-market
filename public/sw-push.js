@@ -1,9 +1,15 @@
-import { precacheAndRoute } from 'workbox-precaching'
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
 import { NetworkFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
+import { clientsClaim } from 'workbox-core'
+
+// ── Activate new SW immediately ──────────────────────────────────────────────
+self.skipWaiting()
+clientsClaim()
 
 // ── Workbox precaching (injected by vite-plugin-pwa) ─────────────────────────
+cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
 // ── Runtime caching for Supabase API ─────────────────────────────────────────
