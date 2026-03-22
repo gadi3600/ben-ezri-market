@@ -3,6 +3,7 @@ import {
   ShoppingCart, CheckCircle2, Trophy,
   ChevronDown, ChevronUp, ArrowLeft, Undo2,
   Plus, X, MapPin, MoveUp, MoveDown,
+  Search, ChevronLeft, ChevronsUpDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -853,11 +854,87 @@ export default function ShopPage() {
     }
   }
 
+  // ── search ──
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // ── collapse state (localStorage) ──
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('shopCollapsedCats')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch { return new Set() }
+  })
+
+  // ── category order (localStorage) ──
+  const [catOrder, setCatOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('shopCatOrder')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+
+  useEffect(() => {
+    if (collapsedCats.size > 0) localStorage.setItem('shopCollapsedCats', JSON.stringify([...collapsedCats]))
+    else localStorage.removeItem('shopCollapsedCats')
+  }, [collapsedCats])
+
+  useEffect(() => {
+    if (catOrder.length > 0) localStorage.setItem('shopCatOrder', JSON.stringify(catOrder))
+    else localStorage.removeItem('shopCatOrder')
+  }, [catOrder])
+
+  // Apply custom category order to groupedActive
+  const sortedGroups = useMemo(() => {
+    if (catOrder.length === 0) return groupedActive
+    const orderMap = new Map(catOrder.map((id, idx) => [id, idx]))
+    return [...groupedActive].sort((a, b) =>
+      (orderMap.get(a.category.id) ?? 999) - (orderMap.get(b.category.id) ?? 999)
+    )
+  }, [groupedActive, catOrder])
+
+  // Search filtering
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return null
+    const q = searchQuery.trim().toLowerCase()
+    return active.filter(i => i.name.toLowerCase().includes(q))
+  }, [searchQuery, active])
+
+  function toggleCollapse(catId: string) {
+    setCollapsedCats(prev => {
+      const next = new Set(prev)
+      next.has(catId) ? next.delete(catId) : next.add(catId)
+      return next
+    })
+  }
+
+  function toggleCollapseAll() {
+    const allIds = sortedGroups.map(g => g.category.id)
+    if (collapsedCats.size >= allIds.length) {
+      setCollapsedCats(new Set())
+    } else {
+      setCollapsedCats(new Set(allIds))
+    }
+  }
+
+  function moveCategoryOrder(catId: string, direction: 'up' | 'down') {
+    const currentOrder = sortedGroups.map(g => g.category.id)
+    const idx = currentOrder.indexOf(catId)
+    if (idx < 0) return
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= currentOrder.length) return
+    ;[currentOrder[idx], currentOrder[swapIdx]] = [currentOrder[swapIdx], currentOrder[idx]]
+    setCatOrder(currentOrder)
+  }
+
   function resetOrder() {
     setCustomOrder([])
     setCatOverrides({})
+    setCatOrder([])
+    setCollapsedCats(new Set())
     localStorage.removeItem('shopItemOrder')
     localStorage.removeItem('shopCatOverrides')
+    localStorage.removeItem('shopCatOrder')
+    localStorage.removeItem('shopCollapsedCats')
   }
 
   // ════════════════════════════════════════
@@ -998,52 +1075,135 @@ export default function ShopPage() {
           </div>
         </div>
 
-        {/* ── Reset order button ── */}
-        {active.length > 0 && customOrder.length > 0 && (
-          <div className="flex justify-end mb-1">
+        {/* ── Search + toolbar ── */}
+        {active.length > 0 && (
+          <div className="flex gap-2 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="חפש פריט..."
+                className="w-full rounded-xl border border-gray-200 bg-white pr-9 pl-3 py-2 text-sm
+                           placeholder-gray-400 focus:outline-none focus:border-primary-400 transition-colors"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             <button
-              onClick={resetOrder}
-              className="text-xs text-gray-400 hover:text-primary-600 font-medium
-                         px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
+              onClick={toggleCollapseAll}
+              className="p-2 rounded-xl text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+              title={collapsedCats.size >= sortedGroups.length ? 'פתח הכל' : 'כווץ הכל'}
             >
-              ↺ איפוס סדר
+              <ChevronsUpDown className="w-4 h-4" />
             </button>
+            {(customOrder.length > 0 || catOrder.length > 0) && (
+              <button
+                onClick={resetOrder}
+                className="text-xs text-gray-400 hover:text-primary-600 font-medium
+                           px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors whitespace-nowrap"
+              >
+                ↺ איפוס
+              </button>
+            )}
           </div>
         )}
 
-        {/* ── Active items grouped by category ── */}
-        {active.length > 0 ? (
+        {/* ── Search results (flat, no categories) ── */}
+        {searchResults ? (
+          searchResults.length > 0 ? (
+            <div className="space-y-1.5">
+              {searchResults.map(item => {
+                const dispIdx = displayOrder.indexOf(item)
+                return (
+                  <ActiveItem
+                    key={item.id} item={item}
+                    itemCategory={getItemCategory(item)}
+                    readOnly={!canEdit(profile!.role)}
+                    index={dispIdx}
+                    total={displayOrder.length}
+                    onCheck={checkItem} onDefer={deferItem}
+                    onTap={setDetailItem}
+                    onMoveUp={() => moveItem(item.id, 'up')}
+                    onMoveDown={() => moveItem(item.id, 'down')}
+                    onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
+                    onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
+                  />
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-center text-gray-400 text-sm py-4">לא נמצאו פריטים</p>
+          )
+        ) : active.length > 0 ? (
+          /* ── Active items grouped by category ── */
           <div className="space-y-3">
-            {groupedActive.map(group => (
-              <div key={group.category.id}>
-                {/* Category header */}
-                <div className="flex items-center gap-2 px-1 mb-1.5">
-                  <span className="text-base">{group.category.emoji}</span>
-                  <span className="text-xs font-bold text-gray-500">{group.category.label}</span>
-                  <span className="text-xs text-gray-300">({group.items.length})</span>
+            {sortedGroups.map((group, groupIdx) => {
+              const isCollapsed = collapsedCats.has(group.category.id)
+              return (
+                <div key={group.category.id}>
+                  {/* Category header with controls */}
+                  <div className="flex items-center gap-1.5 px-1 mb-1.5">
+                    <button onClick={() => toggleCollapse(group.category.id)}
+                      className="text-gray-400 hover:text-primary-600 transition-colors">
+                      {isCollapsed
+                        ? <ChevronLeft className="w-3.5 h-3.5" />
+                        : <ChevronDown className="w-3.5 h-3.5" />
+                      }
+                    </button>
+                    <span className="text-base">{group.category.emoji}</span>
+                    <span className="text-xs font-bold text-gray-500">{group.category.label}</span>
+                    <span className="text-xs text-gray-300">({group.items.length})</span>
+                    <div className="flex-1" />
+                    {/* Category move arrows */}
+                    <button
+                      onClick={() => moveCategoryOrder(group.category.id, 'up')}
+                      disabled={groupIdx === 0}
+                      className="w-5 h-5 rounded flex items-center justify-center
+                                 text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
+                    >
+                      <MoveUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => moveCategoryOrder(group.category.id, 'down')}
+                      disabled={groupIdx === sortedGroups.length - 1}
+                      className="w-5 h-5 rounded flex items-center justify-center
+                                 text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
+                    >
+                      <MoveDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {/* Items (hidden when collapsed) */}
+                  {!isCollapsed && (
+                    <div className="space-y-1.5">
+                      {group.items.map(item => {
+                        const dispIdx = displayOrder.indexOf(item)
+                        return (
+                          <ActiveItem
+                            key={item.id} item={item}
+                            itemCategory={getItemCategory(item)}
+                            readOnly={!canEdit(profile!.role)}
+                            index={dispIdx}
+                            total={displayOrder.length}
+                            onCheck={checkItem} onDefer={deferItem}
+                            onTap={setDetailItem}
+                            onMoveUp={() => moveItem(item.id, 'up')}
+                            onMoveDown={() => moveItem(item.id, 'down')}
+                            onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
+                            onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
+                          />
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  {group.items.map(item => {
-                    const dispIdx = displayOrder.indexOf(item)
-                    return (
-                      <ActiveItem
-                        key={item.id} item={item}
-                        itemCategory={getItemCategory(item)}
-                        readOnly={!canEdit(profile!.role)}
-                        index={dispIdx}
-                        total={displayOrder.length}
-                        onCheck={checkItem} onDefer={deferItem}
-                        onTap={setDetailItem}
-                        onMoveUp={() => moveItem(item.id, 'up')}
-                        onMoveDown={() => moveItem(item.id, 'down')}
-                        onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
-                        onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           checked.length > 0 && (
