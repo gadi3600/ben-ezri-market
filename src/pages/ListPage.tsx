@@ -657,13 +657,15 @@ export default function ListPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Select button (admin only, when items exist) */}
+            {/* Select button (editors, when items exist) */}
             {itemCount > 0 && canEdit(profile!.role) && !selectMode && (
               <button
                 onClick={() => setSelectMode(true)}
-                className="text-xs font-semibold text-primary-600 px-3 py-1.5 rounded-xl
-                           bg-white/70 hover:bg-white transition-colors"
+                className="text-sm font-bold text-white px-4 py-2.5 rounded-xl min-h-[40px]
+                           bg-primary-600 hover:bg-primary-700 active:bg-primary-800
+                           transition-colors shadow-sm flex items-center gap-1.5"
               >
+                <CheckCircle2 className="w-4 h-4" />
                 בחר
               </button>
             )}
