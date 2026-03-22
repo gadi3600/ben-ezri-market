@@ -7,7 +7,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription, sendPushToFamily } from '../lib/push'
-import { canEdit } from '../lib/permissions'
+import { canEdit, isAdmin } from '../lib/permissions'
 import type { ShoppingList, ListItem } from '../lib/types'
 
 // Extended item with joined user info
@@ -205,29 +205,81 @@ function ItemRow({
   item,
   currentUserId,
   readOnly,
+  selectMode,
+  selected,
   onQtyChange,
   onDelete,
   onEdit,
   onLightbox,
+  onToggleSelect,
+  onLongPress,
 }: {
   item: ListItemWithUser
   currentUserId: string
   readOnly?: boolean
+  selectMode?: boolean
+  selected?: boolean
   onQtyChange: (id: string, qty: number) => void
   onDelete: (id: string) => void
   onEdit: (item: ListItemWithUser) => void
   onLightbox: (src: string) => void
+  onToggleSelect: (id: string) => void
+  onLongPress: () => void
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
     : null
 
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleTouchStart() {
+    longPressTimer.current = setTimeout(() => {
+      onLongPress()
+      onToggleSelect(item.id)
+    }, 500)
+  }
+
+  function handleTouchEnd() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function handleClick() {
+    if (selectMode) {
+      onToggleSelect(item.id)
+    }
+  }
+
   return (
-    <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+    <div
+      className={`bg-white rounded-2xl px-4 py-3 shadow-sm border transition-all duration-150 ${
+        selected ? 'border-primary-300 bg-primary-50/40' : 'border-gray-100'
+      }`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onMouseDown={handleTouchStart}
+      onMouseUp={handleTouchEnd}
+      onMouseLeave={handleTouchEnd}
+      onClick={handleClick}
+    >
       <div className="flex items-center gap-3">
+        {/* Selection checkbox (in select mode) */}
+        {selectMode && (
+          <div className={`w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+            selected
+              ? 'bg-primary-500 border-primary-500 text-white'
+              : 'border-gray-300'
+          }`}>
+            {selected && <CheckCircle2 className="w-3.5 h-3.5" />}
+          </div>
+        )}
+
         {/* Thumbnail */}
-        {item.image_url && (
-          <button onClick={() => onLightbox(item.image_url!)} className="flex-shrink-0">
+        {item.image_url && !selectMode && (
+          <button onClick={e => { e.stopPropagation(); onLightbox(item.image_url!) }} className="flex-shrink-0">
             <img
               src={item.image_url}
               alt=""
@@ -236,8 +288,11 @@ function ItemRow({
           </button>
         )}
 
-        {/* Name + added by — tappable to open edit modal */}
-        <button onClick={() => !readOnly && onEdit(item)} className="flex-1 min-w-0 text-right">
+        {/* Name + added by */}
+        <button
+          onClick={e => { e.stopPropagation(); if (!selectMode && !readOnly) onEdit(item) }}
+          className="flex-1 min-w-0 text-right"
+        >
           <span className="text-base font-medium leading-tight block truncate text-gray-800">
             {item.name}
           </span>
@@ -246,13 +301,13 @@ function ItemRow({
           )}
         </button>
 
-        {/* Inline qty +/- (hidden for viewer) */}
-        {readOnly ? (
+        {/* Inline qty +/- (hidden in select mode and for viewer) */}
+        {!selectMode && (readOnly ? (
           <span className="text-sm font-bold text-gray-400 flex-shrink-0">×{item.quantity}</span>
         ) : (
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <button
-              onClick={() => onQtyChange(item.id, Math.max(1, item.quantity - 1))}
+              onClick={e => { e.stopPropagation(); onQtyChange(item.id, Math.max(1, item.quantity - 1)) }}
               className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
                          text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
             >
@@ -262,19 +317,19 @@ function ItemRow({
               {item.quantity}
             </span>
             <button
-              onClick={() => onQtyChange(item.id, item.quantity + 1)}
+              onClick={e => { e.stopPropagation(); onQtyChange(item.id, item.quantity + 1) }}
               className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
                          text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
             >
               <Plus className="w-3 h-3" />
             </button>
           </div>
-        )}
+        ))}
 
-        {/* Delete (hidden for viewer) */}
-        {!readOnly && (
+        {/* Delete (hidden in select mode and for viewer) */}
+        {!selectMode && !readOnly && (
           <button
-            onClick={() => onDelete(item.id)}
+            onClick={e => { e.stopPropagation(); onDelete(item.id) }}
             className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
           >
             <Trash2 className="w-4 h-4" />
@@ -310,6 +365,10 @@ export default function ListPage() {
   // Edit & lightbox
   const [editingItem, setEditingItem]     = useState<ListItemWithUser | null>(null)
   const [lightboxSrc, setLightboxSrc]     = useState<string | null>(null)
+
+  // Multi-select (admin only)
+  const [selectMode, setSelectMode]   = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const inputRef       = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -515,6 +574,37 @@ export default function ListPage() {
     await supabase.from('list_items').delete().eq('id', id)
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(items.map(i => i.id)))
+    }
+  }
+
+  function cancelSelect() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`למחוק ${selectedIds.size} פריטים?`)) return
+    const ids = [...selectedIds]
+    setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
+    setSelectMode(false)
+    setSelectedIds(new Set())
+    await supabase.from('list_items').delete().in('id', ids)
+  }
+
   const itemCount = items.length
 
   // ── Loading ──
@@ -621,6 +711,29 @@ export default function ListPage() {
         </div>
       )}
 
+      {/* Select mode toolbar (admin only) */}
+      {selectMode && isAdmin(profile!.role) && (
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={selectAll}
+            className="text-xs font-semibold text-primary-600 px-3 py-1.5 rounded-xl
+                       bg-primary-50 hover:bg-primary-100 transition-colors"
+          >
+            {selectedIds.size === itemCount ? 'בטל הכל' : 'בחר הכל'}
+          </button>
+          <span className="text-xs text-gray-400">{selectedIds.size}/{itemCount}</span>
+          <div className="flex-1" />
+          <button
+            onClick={cancelSelect}
+            className="text-xs font-medium text-gray-500 px-3 py-1.5 rounded-xl
+                       hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-3.5 h-3.5 inline ml-1" />
+            ביטול
+          </button>
+        </div>
+      )}
+
       {/* Items */}
       {itemCount > 0 && (
         <div className="space-y-2 mb-4">
@@ -629,10 +742,30 @@ export default function ListPage() {
               key={item.id} item={item}
               currentUserId={profile!.id}
               readOnly={!canEdit(profile!.role)}
+              selectMode={selectMode}
+              selected={selectedIds.has(item.id)}
               onQtyChange={updateQty} onDelete={deleteItem}
               onEdit={setEditingItem} onLightbox={setLightboxSrc}
+              onToggleSelect={toggleSelect}
+              onLongPress={() => { if (isAdmin(profile!.role)) setSelectMode(true) }}
             />
           ))}
+        </div>
+      )}
+
+      {/* Bulk delete bar (select mode, admin only) */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-[64px] inset-x-0 bg-red-500 px-4 py-3 z-30">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={deleteSelected}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl
+                         bg-white text-red-600 font-bold text-sm active:scale-95 transition-transform"
+            >
+              <Trash2 className="w-4 h-4" />
+              מחק {selectedIds.size} פריטים
+            </button>
+          </div>
         </div>
       )}
 
