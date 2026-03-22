@@ -566,7 +566,7 @@ export default function ListPage() {
   }
 
   async function deleteSelected() {
-    if (selectedIds.size === 0) return
+    if (selectedIds.size === 0 || !isAdmin(profile!.role)) return
     if (!confirm(`למחוק ${selectedIds.size} פריטים?`)) return
     const ids = [...selectedIds]
     setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
@@ -658,7 +658,7 @@ export default function ListPage() {
           </div>
           <div className="flex items-center gap-2">
             {/* Select button (admin only, when items exist) */}
-            {itemCount > 0 && isAdmin(profile!.role) && !selectMode && (
+            {itemCount > 0 && canEdit(profile!.role) && !selectMode && (
               <button
                 onClick={() => setSelectMode(true)}
                 className="text-xs font-semibold text-primary-600 px-3 py-1.5 rounded-xl
@@ -735,7 +735,7 @@ export default function ListPage() {
       )}
 
       {/* Bulk delete bar (select mode, admin only) */}
-      {selectMode && selectedIds.size > 0 && (
+      {selectMode && selectedIds.size > 0 && isAdmin(profile!.role) && (
         <div className="fixed bottom-[64px] inset-x-0 bg-red-500 px-4 py-3 z-30">
           <div className="max-w-2xl mx-auto">
             <button

@@ -86,16 +86,34 @@ function ListDetailModal({
 
   async function loadItems() {
     setLoading(true)
-    const { data } = await supabase
+
+    // Try with store join first, fall back to simple query
+    let rows: DetailItem[] = []
+    const { data, error } = await supabase
       .from('list_items')
       .select('id, name, quantity, unit, note, purchased_store_id, purchased_at, purchased_store:stores!purchased_store_id(name)')
       .eq('list_id', list.id)
       .order('sort_order', { ascending: true })
 
-    const rows: DetailItem[] = ((data ?? []) as unknown as Array<Omit<DetailItem, 'purchased_store'> & { purchased_store: { name: string }[] | { name: string } | null }>).map(r => ({
-      ...r,
-      purchased_store: Array.isArray(r.purchased_store) ? r.purchased_store[0] ?? null : r.purchased_store,
-    }))
+    if (error || !data) {
+      // Fallback: query without store join (column may not exist)
+      const { data: fallback } = await supabase
+        .from('list_items')
+        .select('id, name, quantity, unit, note')
+        .eq('list_id', list.id)
+        .order('sort_order', { ascending: true })
+      rows = (fallback ?? []).map(r => ({
+        ...r,
+        purchased_store_id: null,
+        purchased_at: null,
+        purchased_store: null,
+      }))
+    } else {
+      rows = (data as unknown as Array<Omit<DetailItem, 'purchased_store'> & { purchased_store: { name: string }[] | { name: string } | null }>).map(r => ({
+        ...r,
+        purchased_store: Array.isArray(r.purchased_store) ? r.purchased_store[0] ?? null : r.purchased_store,
+      }))
+    }
 
     setItems(rows)
     setSelected(new Set(rows.map(i => i.id)))
