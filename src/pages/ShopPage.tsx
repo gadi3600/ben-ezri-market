@@ -240,14 +240,16 @@ function ActiveItem({
       {/* Name + qty — tappable area */}
       <button onClick={() => onTap(item)} className="flex-1 min-w-0 text-right relative">
         <div className="flex items-center gap-1.5">
-          <p className="text-base font-semibold text-gray-800 leading-tight truncate">{item.name}</p>
+          <p className="text-base font-semibold text-gray-800 leading-tight truncate">
+            {item.name}
+            {item.quantity !== 1 && (
+              <span className="text-sm font-bold text-gray-400 mr-1">×{item.quantity}</span>
+            )}
+          </p>
           {hasExtra && (
             <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
           )}
         </div>
-        {(item.quantity !== 1 || item.unit !== 'יחידה') && (
-          <p className="text-xs text-gray-400 mt-0.5">{item.quantity} {item.unit}</p>
-        )}
       </button>
 
       {/* ✓ לעגלה */}

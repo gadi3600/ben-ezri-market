@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera,
-  X, MessageSquare, Pencil,
+  X, MessageSquare,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -183,91 +183,74 @@ function EditItemModal({
 
 function ItemRow({
   item,
-  onToggle,
+  onQtyChange,
   onDelete,
   onEdit,
   onLightbox,
 }: {
   item: ListItem
-  onToggle: (item: ListItem) => void
+  onQtyChange: (id: string, qty: number) => void
   onDelete: (id: string) => void
   onEdit: (item: ListItem) => void
   onLightbox: (src: string) => void
 }) {
-  const hasExtra = !!(item.note || item.image_url)
-
   return (
-    <div
-      className={`flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-sm border transition-all duration-200 ${
-        item.is_checked ? 'border-primary-100 bg-primary-50/40' : 'border-gray-100'
-      }`}
-    >
-      {/* Checkbox */}
-      <button
-        onClick={() => onToggle(item)}
-        className={`w-7 h-7 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all duration-200 ${
-          item.is_checked
-            ? 'bg-primary-500 border-primary-500 text-white scale-105'
-            : 'border-gray-300 hover:border-primary-400'
-        }`}
-      >
-        {item.is_checked && <span className="text-[11px] font-extrabold">✓</span>}
-      </button>
+    <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-3">
+        {/* Thumbnail */}
+        {item.image_url && (
+          <button onClick={() => onLightbox(item.image_url!)} className="flex-shrink-0">
+            <img
+              src={item.image_url}
+              alt=""
+              className="w-10 h-10 rounded-xl object-cover border border-gray-100"
+            />
+          </button>
+        )}
 
-      {/* Thumbnail */}
-      {item.image_url && (
-        <button onClick={() => onLightbox(item.image_url!)} className="flex-shrink-0">
-          <img
-            src={item.image_url}
-            alt=""
-            className="w-10 h-10 rounded-xl object-cover border border-gray-100"
-          />
-        </button>
-      )}
-
-      {/* Name + qty + note indicator — tappable to edit */}
-      <button onClick={() => onEdit(item)} className="flex-1 min-w-0 text-right">
-        <div className="flex items-center gap-1">
-          <span
-            className={`text-base font-medium leading-tight block truncate ${
-              item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'
-            }`}
-          >
+        {/* Name — tappable to open edit modal */}
+        <button onClick={() => onEdit(item)} className="flex-1 min-w-0 text-right">
+          <span className="text-base font-medium leading-tight block truncate text-gray-800">
             {item.name}
           </span>
-          {hasExtra && (
-            <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {(item.quantity !== 1 || item.unit !== 'יחידה') && (
-            <span className="text-xs text-gray-400">
-              {item.quantity} {item.unit}
-            </span>
-          )}
-          {item.note && (
-            <span className="text-xs text-gray-400 truncate max-w-[120px]">
-              📝 {item.note}
-            </span>
-          )}
-        </div>
-      </button>
+        </button>
 
-      {/* Edit icon */}
-      <button
-        onClick={() => onEdit(item)}
-        className="p-1.5 text-gray-200 hover:text-primary-400 transition-colors flex-shrink-0"
-      >
-        <Pencil className="w-3.5 h-3.5" />
-      </button>
+        {/* Inline qty +/- */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            onClick={() => onQtyChange(item.id, Math.max(1, item.quantity - 1))}
+            className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
+                       text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          <span className="w-7 text-center text-sm font-bold text-gray-700 select-none">
+            {item.quantity}
+          </span>
+          <button
+            onClick={() => onQtyChange(item.id, item.quantity + 1)}
+            className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
+                       text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        </div>
 
-      {/* Delete */}
-      <button
-        onClick={() => onDelete(item.id)}
-        className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+        {/* Delete */}
+        <button
+          onClick={() => onDelete(item.id)}
+          className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Note line below */}
+      {item.note && (
+        <p className="text-xs text-gray-400 mt-1.5 pr-1 truncate">
+          📝 {item.note}
+        </p>
+      )}
     </div>
   )
 }
@@ -441,15 +424,9 @@ export default function ListPage() {
     await supabase.from('list_items').update(updates).eq('id', id)
   }
 
-  async function toggleItem(item: ListItem) {
-    const now = new Date().toISOString()
-    const checked = !item.is_checked
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: checked } : i))
-    await supabase.from('list_items').update({
-      is_checked: checked,
-      checked_by: checked ? profile!.id : null,
-      checked_at: checked ? now : null,
-    }).eq('id', item.id)
+  async function updateQty(id: string, qty: number) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i))
+    await supabase.from('list_items').update({ quantity: qty }).eq('id', id)
   }
 
   async function deleteItem(id: string) {
@@ -457,9 +434,7 @@ export default function ListPage() {
     await supabase.from('list_items').delete().eq('id', id)
   }
 
-  const unchecked = items.filter(i => !i.is_checked)
-  const checked   = items.filter(i =>  i.is_checked)
-  const pct       = items.length > 0 ? Math.round((checked.length / items.length) * 100) : 0
+  const itemCount = items.length
 
   // ── Loading ──
   if (loading) return (
@@ -509,67 +484,36 @@ export default function ListPage() {
         <div>
           <h2 className="font-extrabold text-primary-800 text-lg leading-tight">{list.name}</h2>
           <p className="text-sm text-primary-600 mt-0.5">
-            {unchecked.length > 0
-              ? `${unchecked.length} נותרו • ${checked.length} בעגלה`
-              : checked.length > 0 ? '✅ הכל בעגלה!' : 'הרשימה ריקה'}
+            {itemCount > 0 ? `${itemCount} פריטים ברשימה` : 'הרשימה ריקה'}
           </p>
         </div>
-        {items.length > 0 && (
+        {itemCount > 0 && (
           <div className="text-center">
-            <div className="text-3xl font-extrabold text-primary-600 leading-none">{pct}%</div>
-            <div className="text-xs text-primary-400 mt-0.5">הושלם</div>
+            <div className="text-3xl font-extrabold text-primary-600 leading-none">{itemCount}</div>
+            <div className="text-xs text-primary-400 mt-0.5">פריטים</div>
           </div>
         )}
       </div>
 
-      {/* Progress bar */}
-      {items.length > 0 && (
-        <div className="h-2 bg-primary-100 rounded-full mb-4 overflow-hidden">
-          <div
-            className="h-full bg-primary-500 rounded-full transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-
       {/* Empty state */}
-      {items.length === 0 && (
+      {itemCount === 0 && (
         <div className="text-center py-10 text-gray-400">
           <p className="text-4xl mb-3">🛒</p>
           <p className="text-sm">הרשימה ריקה — הוסף פריט למטה</p>
         </div>
       )}
 
-      {/* Unchecked items */}
-      {unchecked.length > 0 && (
+      {/* Items */}
+      {itemCount > 0 && (
         <div className="space-y-2 mb-4">
-          {unchecked.map(item => (
+          {items.map(item => (
             <ItemRow
               key={item.id} item={item}
-              onToggle={toggleItem} onDelete={deleteItem}
+              onQtyChange={updateQty} onDelete={deleteItem}
               onEdit={setEditingItem} onLightbox={setLightboxSrc}
             />
           ))}
         </div>
-      )}
-
-      {/* Checked items */}
-      {checked.length > 0 && (
-        <>
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <CheckCircle2 className="w-4 h-4 text-primary-400" />
-            <span className="text-xs font-semibold text-primary-500">כבר בעגלה ({checked.length})</span>
-          </div>
-          <div className="space-y-2 opacity-55">
-            {checked.map(item => (
-              <ItemRow
-                key={item.id} item={item}
-                onToggle={toggleItem} onDelete={deleteItem}
-                onEdit={setEditingItem} onLightbox={setLightboxSrc}
-              />
-            ))}
-          </div>
-        </>
       )}
 
       {/* ── Autocomplete suggestions (above input bar) ── */}
