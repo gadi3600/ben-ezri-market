@@ -426,26 +426,36 @@ export default function ShopPage() {
     if (storeData) setStores(storeData)
 
     if (listData) {
-      // Clear done state if there's an active list (new shopping session)
-      if (listData.status === 'active' || listData.status === 'shopping') {
-        localStorage.removeItem('shopDoneState')
-        localStorage.removeItem('shopDeferredCount')
-        setDoneState('idle')
-      }
       setList(listData)
       const { data: itemData } = await supabase
         .from('list_items')
         .select('*, added_by_user:users!added_by(id, full_name)')
         .eq('list_id', listData.id)
         .order('sort_order', { ascending: true })
-      setItems((itemData as ListItemWithUser[]) ?? [])
+      const loadedItems = (itemData as ListItemWithUser[]) ?? []
+      setItems(loadedItems)
+
+      // Only reset doneState if this is a different list than what was completed
+      const savedDone = localStorage.getItem('shopDoneState')
+      const savedListId = localStorage.getItem('shopCompletedListId')
+      if (savedDone && savedListId !== listData.id) {
+        // New list — clear old completion state
+        localStorage.removeItem('shopDoneState')
+        localStorage.removeItem('shopDeferredCount')
+        localStorage.removeItem('shopCompletedListId')
+        setDoneState('idle')
+      }
 
       if (listData.store_id) {
         const found = storeData?.find(s => s.id === listData.store_id)
         if (found) setSelectedStore(found)
         setShowPicker(false)
       } else {
-        setShowPicker(true)
+        // Only show picker if no store selected and not completed
+        const currentDone = localStorage.getItem('shopDoneState')
+        if (!currentDone || currentDone === 'idle') {
+          setShowPicker(true)
+        }
       }
     }
 
@@ -588,6 +598,7 @@ export default function ShopPage() {
     setDoneState(state)
     localStorage.setItem('shopDoneState', state)
     localStorage.setItem('shopDeferredCount', String(deferredCount))
+    if (list) localStorage.setItem('shopCompletedListId', list.id)
   }
 
   // ── derived state ──
