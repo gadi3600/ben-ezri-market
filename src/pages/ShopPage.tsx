@@ -10,6 +10,28 @@ import type { ShoppingList, ListItem, Store } from '../lib/types'
 import ReceiptModal from '../components/ReceiptModal'
 import ImageLightbox from '../components/ImageLightbox'
 
+// Extended item with joined user info
+interface ListItemWithUser extends ListItem {
+  added_by_user: { id: string; full_name: string } | null
+}
+
+// Consistent color per user based on their id
+const USER_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-orange-100 text-orange-700',
+  'bg-purple-100 text-purple-700',
+  'bg-pink-100 text-pink-700',
+  'bg-teal-100 text-teal-700',
+  'bg-amber-100 text-amber-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-rose-100 text-rose-700',
+]
+function userColor(id: string) {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
+}
+
 // ── Store visual config ───────────────────────────────────────────────────────
 
 const STORE_VISUALS: Record<string, { emoji: string; bg: string; ring: string; text: string }> = {
@@ -227,16 +249,27 @@ function ActiveItem({
   onDefer,
   onTap,
 }: {
-  item: ListItem
-  onCheck: (item: ListItem) => void
-  onDefer: (item: ListItem) => void
-  onTap: (item: ListItem) => void
+  item: ListItemWithUser
+  onCheck: (item: ListItemWithUser) => void
+  onDefer: (item: ListItemWithUser) => void
+  onTap: (item: ListItemWithUser) => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
+  const user = item.added_by_user
+  const initial = user?.full_name?.charAt(0) ?? ''
+  const color = item.added_by ? userColor(item.added_by) : 'bg-gray-100 text-gray-400'
 
   return (
     <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5
                     shadow-sm border border-gray-100 active:scale-[0.99] transition-transform">
+      {/* User initial circle */}
+      {initial && (
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center
+                         text-xs font-extrabold flex-shrink-0 ${color}`}>
+          {initial}
+        </div>
+      )}
+
       {/* Name + qty — tappable area */}
       <button onClick={() => onTap(item)} className="flex-1 min-w-0 text-right relative">
         <div className="flex items-center gap-1.5">
@@ -314,7 +347,7 @@ function DeferredItem({
 
 type DoneState = 'idle' | 'complete' | 'continue'
 
-function patch(items: ListItem[], id: string, p: Partial<ListItem>) {
+function patch(items: ListItemWithUser[], id: string, p: Partial<ListItem>) {
   return items.map(i => (i.id === id ? { ...i, ...p } : i))
 }
 
@@ -323,7 +356,7 @@ export default function ShopPage() {
 
   // data
   const [list, setList]           = useState<ShoppingList | null>(null)
-  const [items, setItems]         = useState<ListItem[]>([])
+  const [items, setItems]         = useState<ListItemWithUser[]>([])
   const [stores, setStores]       = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
 
@@ -337,7 +370,7 @@ export default function ShopPage() {
   const [deferredCount, setDeferredCount] = useState(0)
 
   // detail modal & lightbox
-  const [detailItem, setDetailItem]     = useState<ListItem | null>(null)
+  const [detailItem, setDetailItem]     = useState<ListItemWithUser | null>(null)
   const [lightboxSrc, setLightboxSrc]   = useState<string | null>(null)
 
   // receipt modal
@@ -358,7 +391,9 @@ export default function ShopPage() {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'list_items', filter: `list_id=eq.${list.id}` },
-        (payload) => setItems(prev => prev.map(i => i.id === payload.new.id ? payload.new as ListItem : i)),
+        (payload) => setItems(prev => prev.map(i => i.id === payload.new.id
+          ? { ...payload.new, added_by_user: i.added_by_user } as ListItemWithUser
+          : i)),
       )
       .subscribe()
     return () => { supabase.removeChannel(ch) }
@@ -383,10 +418,11 @@ export default function ShopPage() {
     if (listData) {
       setList(listData)
       const { data: itemData } = await supabase
-        .from('list_items').select('*')
+        .from('list_items')
+        .select('*, added_by_user:users!added_by(id, full_name)')
         .eq('list_id', listData.id)
         .order('sort_order', { ascending: true })
-      setItems(itemData ?? [])
+      setItems((itemData as ListItemWithUser[]) ?? [])
 
       if (listData.store_id) {
         const found = storeData?.find(s => s.id === listData.store_id)

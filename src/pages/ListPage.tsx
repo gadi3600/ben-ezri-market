@@ -6,6 +6,11 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem } from '../lib/types'
+
+// Extended item with joined user info
+interface ListItemWithUser extends ListItem {
+  added_by_user: { id: string; full_name: string } | null
+}
 import ImageLightbox from '../components/ImageLightbox'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -183,17 +188,23 @@ function EditItemModal({
 
 function ItemRow({
   item,
+  currentUserId,
   onQtyChange,
   onDelete,
   onEdit,
   onLightbox,
 }: {
-  item: ListItem
+  item: ListItemWithUser
+  currentUserId: string
   onQtyChange: (id: string, qty: number) => void
   onDelete: (id: string) => void
-  onEdit: (item: ListItem) => void
+  onEdit: (item: ListItemWithUser) => void
   onLightbox: (src: string) => void
 }) {
+  const adderName = item.added_by_user
+    ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
+    : null
+
   return (
     <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
       <div className="flex items-center gap-3">
@@ -208,11 +219,14 @@ function ItemRow({
           </button>
         )}
 
-        {/* Name — tappable to open edit modal */}
+        {/* Name + added by — tappable to open edit modal */}
         <button onClick={() => onEdit(item)} className="flex-1 min-w-0 text-right">
           <span className="text-base font-medium leading-tight block truncate text-gray-800">
             {item.name}
           </span>
+          {adderName && (
+            <span className="text-[11px] text-gray-300 block truncate">{adderName}</span>
+          )}
         </button>
 
         {/* Inline qty +/- */}
@@ -260,7 +274,7 @@ function ItemRow({
 export default function ListPage() {
   const { profile } = useAuth()
   const [list, setList]           = useState<ShoppingList | null>(null)
-  const [items, setItems]         = useState<ListItem[]>([])
+  const [items, setItems]         = useState<ListItemWithUser[]>([])
   const [newName, setNewName]     = useState('')
   const [newQty, setNewQty]       = useState(1)
   const [loading, setLoading]     = useState(true)
@@ -270,7 +284,7 @@ export default function ListPage() {
   const [pendingImage, setPendingImage] = useState<File | null>(null)
 
   // Edit & lightbox
-  const [editingItem, setEditingItem]     = useState<ListItem | null>(null)
+  const [editingItem, setEditingItem]     = useState<ListItemWithUser | null>(null)
   const [lightboxSrc, setLightboxSrc]     = useState<string | null>(null)
 
   const inputRef     = useRef<HTMLInputElement>(null)
@@ -302,10 +316,12 @@ export default function ListPage() {
           if (payload.eventType === 'INSERT') {
             setItems(prev => {
               if (prev.some(i => i.id === payload.new.id)) return prev
-              return [...prev, payload.new as ListItem]
+              return [...prev, { ...payload.new, added_by_user: null } as ListItemWithUser]
             })
           } else if (payload.eventType === 'UPDATE') {
-            setItems(prev => prev.map(i => (i.id === payload.new.id ? (payload.new as ListItem) : i)))
+            setItems(prev => prev.map(i => (i.id === payload.new.id
+              ? { ...payload.new, added_by_user: i.added_by_user } as ListItemWithUser
+              : i)))
           } else if (payload.eventType === 'DELETE') {
             setItems(prev => prev.filter(i => i.id !== payload.old.id))
           }
@@ -338,10 +354,10 @@ export default function ListPage() {
       setList(data)
       const { data: itemData } = await supabase
         .from('list_items')
-        .select('*')
+        .select('*, added_by_user:users!added_by(id, full_name)')
         .eq('list_id', data.id)
         .order('sort_order', { ascending: true })
-      setItems(itemData ?? [])
+      setItems((itemData as ListItemWithUser[]) ?? [])
     } else {
       setList(null)
       setItems([])
@@ -405,9 +421,13 @@ export default function ListPage() {
     }).select().single()
 
     if (data) {
+      const itemWithUser: ListItemWithUser = {
+        ...data,
+        added_by_user: { id: profile.id, full_name: profile.full_name },
+      }
       setItems(prev => {
         if (prev.some(i => i.id === data.id)) return prev
-        return [...prev, data]
+        return [...prev, itemWithUser]
       })
       setAllSuggestions(prev =>
         prev.includes(trimmedName) ? prev : [...prev, trimmedName]
@@ -509,6 +529,7 @@ export default function ListPage() {
           {items.map(item => (
             <ItemRow
               key={item.id} item={item}
+              currentUserId={profile!.id}
               onQtyChange={updateQty} onDelete={deleteItem}
               onEdit={setEditingItem} onLightbox={setLightboxSrc}
             />
