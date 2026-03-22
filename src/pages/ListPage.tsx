@@ -790,8 +790,8 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* Select mode toolbar (admin only) */}
-      {selectMode && isAdmin(profile!.role) && (
+      {/* Select mode toolbar */}
+      {selectMode && canEdit(profile!.role) && (
         <div className="flex items-center gap-2 mb-3">
           <button
             onClick={selectAll}
