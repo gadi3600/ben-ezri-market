@@ -677,7 +677,7 @@ export default function ShopPage() {
         updated_at: new Date().toISOString(),
       }))
     if (catRows.length > 0) {
-      await supabase.from('item_categories').upsert(catRows, { onConflict: 'name' })
+      await supabase.from('item_categories').upsert(catRows, { onConflict: 'name,family_id' })
     }
 
     setCompleting(false)
@@ -848,7 +848,7 @@ export default function ShopPage() {
         category:   newCatId,
         family_id:  profile.family_id,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'name' })
+      }, { onConflict: 'name,family_id' })
       setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
     }
   }
