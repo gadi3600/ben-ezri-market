@@ -365,14 +365,19 @@ export default function ShopPage() {
   const [stores, setStores]       = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
 
-  // ui
+  // ui — restore doneState from localStorage
   const [loading, setLoading]         = useState(true)
   const [completing, setCompleting]   = useState(false)
   const [showPicker, setShowPicker]   = useState(false)
   const [showChecked, setShowChecked] = useState(false)
   const [showDeferred, setShowDeferred] = useState(true)
-  const [doneState, setDoneState]     = useState<DoneState>('idle')
-  const [deferredCount, setDeferredCount] = useState(0)
+  const [doneState, setDoneState]     = useState<DoneState>(() => {
+    const saved = localStorage.getItem('shopDoneState')
+    return (saved === 'complete' || saved === 'continue') ? saved : 'idle'
+  })
+  const [deferredCount, setDeferredCount] = useState(() => {
+    return parseInt(localStorage.getItem('shopDeferredCount') ?? '0', 10)
+  })
 
   // detail modal & lightbox
   const [detailItem, setDetailItem]     = useState<ListItemWithUser | null>(null)
@@ -421,6 +426,12 @@ export default function ShopPage() {
     if (storeData) setStores(storeData)
 
     if (listData) {
+      // Clear done state if there's an active list (new shopping session)
+      if (listData.status === 'active' || listData.status === 'shopping') {
+        localStorage.removeItem('shopDoneState')
+        localStorage.removeItem('shopDeferredCount')
+        setDoneState('idle')
+      }
       setList(listData)
       const { data: itemData } = await supabase
         .from('list_items')
@@ -573,11 +584,10 @@ export default function ShopPage() {
 
   function handleReceiptClose() {
     setShowReceiptModal(false)
-    if (deferredCount > 0) {
-      setDoneState('continue')
-    } else {
-      setDoneState('complete')
-    }
+    const state = deferredCount > 0 ? 'continue' : 'complete'
+    setDoneState(state)
+    localStorage.setItem('shopDoneState', state)
+    localStorage.setItem('shopDeferredCount', String(deferredCount))
   }
 
   // ── derived state ──
