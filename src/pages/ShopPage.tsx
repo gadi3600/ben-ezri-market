@@ -682,21 +682,12 @@ export default function ShopPage() {
     } catch { return [] }
   })
 
-  // Save order to localStorage when it changes, and clean stale IDs
+  // Save order to localStorage when it changes
   useEffect(() => {
     if (customOrder.length > 0) {
-      const activeIds = new Set(active.map(i => i.id))
-      const cleaned = customOrder.filter(id => activeIds.has(id))
-      // Add any new items not in custom order
-      for (const item of active) {
-        if (!cleaned.includes(item.id)) cleaned.push(item.id)
-      }
-      if (cleaned.length !== customOrder.length || cleaned.some((id, i) => id !== customOrder[i])) {
-        setCustomOrder(cleaned)
-      }
-      localStorage.setItem('shopItemOrder', JSON.stringify(cleaned))
+      localStorage.setItem('shopItemOrder', JSON.stringify(customOrder))
     }
-  }, [customOrder, active]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [customOrder])
 
   // Default category-sorted flat list (used when no custom order)
   const defaultSorted = useMemo(() => {
@@ -749,60 +740,21 @@ export default function ShopPage() {
   }, [groupedActive])
 
   function moveItem(itemId: string, direction: 'up' | 'down') {
-    // Find which category group this item is in
-    let groupIdx = -1, itemIdx = -1
-    for (let g = 0; g < groupedActive.length; g++) {
-      const i = groupedActive[g].items.findIndex(it => it.id === itemId)
-      if (i >= 0) { groupIdx = g; itemIdx = i; break }
-    }
-    if (groupIdx < 0) return
-
-    const group = groupedActive[groupIdx]
-
-    if (direction === 'up') {
-      if (itemIdx > 0) {
-        // Move up within same category
-        const newGroupItems = [...group.items]
-        ;[newGroupItems[itemIdx], newGroupItems[itemIdx - 1]] = [newGroupItems[itemIdx - 1], newGroupItems[itemIdx]]
-        const newOrder = groupedActive.flatMap((g, gi) => gi === groupIdx ? newGroupItems.map(i => i.id) : g.items.map(i => i.id))
-        setCustomOrder(newOrder)
-      } else if (groupIdx > 0) {
-        // Move to end of previous category group
-        const prevGroup = groupedActive[groupIdx - 1]
-        const newOrder = groupedActive.flatMap((g, gi) => {
-          if (gi === groupIdx - 1) return [...prevGroup.items.map(i => i.id), itemId]
-          if (gi === groupIdx) return group.items.filter(i => i.id !== itemId).map(i => i.id)
-          return g.items.map(i => i.id)
-        }).filter(Boolean)
-        setCustomOrder(newOrder)
-      }
-    } else {
-      if (itemIdx < group.items.length - 1) {
-        // Move down within same category
-        const newGroupItems = [...group.items]
-        ;[newGroupItems[itemIdx], newGroupItems[itemIdx + 1]] = [newGroupItems[itemIdx + 1], newGroupItems[itemIdx]]
-        const newOrder = groupedActive.flatMap((g, gi) => gi === groupIdx ? newGroupItems.map(i => i.id) : g.items.map(i => i.id))
-        setCustomOrder(newOrder)
-      } else if (groupIdx < groupedActive.length - 1) {
-        // Move to start of next category group
-        const nextGroup = groupedActive[groupIdx + 1]
-        const newOrder = groupedActive.flatMap((g, gi) => {
-          if (gi === groupIdx) return group.items.filter(i => i.id !== itemId).map(i => i.id)
-          if (gi === groupIdx + 1) return [itemId, ...nextGroup.items.map(i => i.id)]
-          return g.items.map(i => i.id)
-        }).filter(Boolean)
-        setCustomOrder(newOrder)
-      }
-    }
+    const ids = displayOrder.map(i => i.id)
+    const idx = ids.indexOf(itemId)
+    if (idx < 0) return
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= ids.length) return
+    ;[ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]]
+    setCustomOrder(ids)
   }
 
-  function moveItemTo(_itemId: string, targetIdx: number) {
-    // Use displayOrder for position-based swap
-    const currentIds = displayOrder.map(i => i.id)
-    const fromIdx = currentIds.indexOf(_itemId)
-    if (fromIdx < 0 || targetIdx < 0 || targetIdx >= currentIds.length) return
-    ;[currentIds[fromIdx], currentIds[targetIdx]] = [currentIds[targetIdx], currentIds[fromIdx]]
-    setCustomOrder(currentIds)
+  function moveItemTo(itemId: string, targetIdx: number) {
+    const ids = displayOrder.map(i => i.id)
+    const fromIdx = ids.indexOf(itemId)
+    if (fromIdx < 0 || targetIdx < 0 || targetIdx >= ids.length) return
+    ;[ids[fromIdx], ids[targetIdx]] = [ids[targetIdx], ids[fromIdx]]
+    setCustomOrder(ids)
   }
 
   function resetOrder() {
