@@ -210,6 +210,7 @@ function ItemRow({
   item,
   currentUserId,
   readOnly,
+  adminMode,
   selectMode,
   selected,
   itemCategory,
@@ -223,6 +224,7 @@ function ItemRow({
   item: ListItemWithUser
   currentUserId: string
   readOnly?: boolean
+  adminMode?: boolean
   selectMode?: boolean
   selected?: boolean
   itemCategory: Category
@@ -305,7 +307,7 @@ function ItemRow({
 
         {/* Name + added by */}
         <button
-          onClick={e => { e.stopPropagation(); if (!selectMode && !readOnly) onEdit(item) }}
+          onClick={e => { e.stopPropagation(); if (!selectMode && adminMode) onEdit(item) }}
           className="flex-1 min-w-0 text-right"
         >
           <span className="text-base font-medium leading-tight block truncate text-gray-800">
@@ -341,8 +343,8 @@ function ItemRow({
           </div>
         ))}
 
-        {/* Delete (hidden in select mode and for viewer) */}
-        {!selectMode && !readOnly && (
+        {/* Delete (admin only) */}
+        {!selectMode && adminMode && (
           <button
             onClick={e => { e.stopPropagation(); onDelete(item.id) }}
             className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
@@ -829,6 +831,7 @@ export default function ListPage() {
                     key={item.id} item={item}
                     currentUserId={profile!.id}
                     readOnly={!canEdit(profile!.role)}
+                    adminMode={isAdmin(profile!.role)}
                     selectMode={selectMode}
                     selected={selectedIds.has(item.id)}
                     itemCategory={getItemCategory(item)}
@@ -860,8 +863,8 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* ── Autocomplete suggestions (above input bar) ── */}
-      {canEdit(profile!.role) && suggestions.length > 0 && (
+      {/* ── Autocomplete suggestions (above input bar, admin only) ── */}
+      {isAdmin(profile!.role) && suggestions.length > 0 && (
         <div className="fixed bottom-[136px] inset-x-0 px-4 z-50">
           <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {suggestions.map(s => (
@@ -883,8 +886,8 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* ── Hidden file inputs + add bar (editors only) ── */}
-      {canEdit(profile!.role) && (<>
+      {/* ── Hidden file inputs + add bar (admin only) ── */}
+      {isAdmin(profile!.role) && (<>
       {/* Hidden file inputs */}
       <input
         ref={cameraInputRef}
