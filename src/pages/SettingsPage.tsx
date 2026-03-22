@@ -451,8 +451,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── Stores (editors only) ── */}
-      {canEdit(profile!.role) && (
+      {/* ── Stores (admin only) ── */}
+      {isAdmin(profile!.role) && (
       <Section icon={<StoreIcon className="w-5 h-5 text-primary-600" />} title="חנויות">
         {/* Add store */}
         <div className="flex gap-2 mb-1">
