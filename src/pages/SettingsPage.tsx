@@ -65,7 +65,7 @@ export default function SettingsPage() {
   )
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-32">
 
       {/* ── Profile ── */}
       <Section icon={<User className="w-5 h-5 text-primary-600" />} title="הפרופיל שלי">

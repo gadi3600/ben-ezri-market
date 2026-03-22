@@ -382,7 +382,7 @@ export default function HistoryPage() {
         />
       )}
 
-      <div className="space-y-3 pb-6">
+      <div className="space-y-3 pb-32">
         <div className="card-green flex items-center gap-3">
           <Clock className="w-5 h-5 text-primary-600 flex-shrink-0" />
           <div>
