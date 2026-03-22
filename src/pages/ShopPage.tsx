@@ -689,61 +689,57 @@ export default function ShopPage() {
     }
   }, [customOrder])
 
-  // Group active items by category, respecting custom order for cross-category moves
+  // Default category-sorted flat list (used when no custom order)
+  const defaultSorted = useMemo(() => {
+    return [...active].sort((a, b) => {
+      const catA = CATEGORY_ORDER.indexOf(classifyItem(a.name).id)
+      const catB = CATEGORY_ORDER.indexOf(classifyItem(b.name).id)
+      return catA - catB
+    })
+  }, [active])
+
+  // Flat sorted list: custom order if exists, otherwise default category sort
+  const flatActive = useMemo(() => {
+    if (customOrder.length === 0) return defaultSorted
+    const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
+    return [...active].sort((a, b) => {
+      const oA = orderMap.get(a.id) ?? 9999
+      const oB = orderMap.get(b.id) ?? 9999
+      return oA - oB
+    })
+  }, [active, customOrder, defaultSorted])
+
+  // Group flat list into consecutive category sections (for display only)
   const groupedActive = useMemo(() => {
-    const withCat = active.map(item => ({
-      item,
-      category: classifyItem(item.name),
-    }))
-
-    if (customOrder.length > 0) {
-      // Custom order mode: sort entirely by saved order, group by consecutive category
-      const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
-      withCat.sort((a, b) => {
-        const oA = orderMap.get(a.item.id) ?? 9999
-        const oB = orderMap.get(b.item.id) ?? 9999
-        return oA - oB
-      })
-    } else {
-      // Default: sort by category order
-      withCat.sort((a, b) => {
-        const catA = CATEGORY_ORDER.indexOf(a.category.id)
-        const catB = CATEGORY_ORDER.indexOf(b.category.id)
-        return catA - catB
-      })
-    }
-
-    // Group by consecutive category
     const groups: { category: Category; items: ListItemWithUser[] }[] = []
     let currentCat: string | null = null
-    for (const { item, category } of withCat) {
-      if (category.id !== currentCat) {
-        groups.push({ category, items: [] })
-        currentCat = category.id
+    for (const item of flatActive) {
+      const cat = classifyItem(item.name)
+      if (cat.id !== currentCat) {
+        groups.push({ category: cat, items: [] })
+        currentCat = cat.id
       }
       groups[groups.length - 1].items.push(item)
     }
     return groups
-  }, [active, customOrder])
-
-  // Flat sorted list for move operations
-  const flatActive = useMemo(() => groupedActive.flatMap(g => g.items), [groupedActive])
+  }, [flatActive])
 
   function moveItem(itemId: string, direction: 'up' | 'down') {
-    const idx = flatActive.findIndex(i => i.id === itemId)
+    const currentIds = flatActive.map(i => i.id)
+    const idx = currentIds.indexOf(itemId)
     if (idx < 0) return
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= flatActive.length) return
-    moveItemTo(itemId, swapIdx)
+    if (swapIdx < 0 || swapIdx >= currentIds.length) return
+    ;[currentIds[idx], currentIds[swapIdx]] = [currentIds[swapIdx], currentIds[idx]]
+    setCustomOrder(currentIds)
   }
 
   function moveItemTo(itemId: string, targetIdx: number) {
-    const newOrder = flatActive.map(i => i.id)
-    const fromIdx = newOrder.indexOf(itemId)
-    if (fromIdx < 0 || targetIdx < 0 || targetIdx >= newOrder.length) return
-    // Swap the two items
-    ;[newOrder[fromIdx], newOrder[targetIdx]] = [newOrder[targetIdx], newOrder[fromIdx]]
-    setCustomOrder(newOrder)
+    const currentIds = flatActive.map(i => i.id)
+    const fromIdx = currentIds.indexOf(itemId)
+    if (fromIdx < 0 || targetIdx < 0 || targetIdx >= currentIds.length) return
+    ;[currentIds[fromIdx], currentIds[targetIdx]] = [currentIds[targetIdx], currentIds[fromIdx]]
+    setCustomOrder(currentIds)
   }
 
   function resetOrder() {
