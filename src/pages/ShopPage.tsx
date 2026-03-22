@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   ShoppingCart, CheckCircle2, Trophy,
   ChevronDown, ChevronUp, ArrowLeft, Undo2,
-  Plus, X, MapPin,
+  Plus, X, MapPin, MoveUp, MoveDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
 import { canEdit } from '../lib/permissions'
+import { classifyItem, CATEGORY_ORDER } from '../lib/categories'
+import type { Category } from '../lib/categories'
 import ReceiptModal from '../components/ReceiptModal'
 import ImageLightbox from '../components/ImageLightbox'
 
@@ -247,15 +249,23 @@ function ItemDetailModal({
 function ActiveItem({
   item,
   readOnly,
+  index,
+  total,
   onCheck,
   onDefer,
   onTap,
+  onMoveUp,
+  onMoveDown,
 }: {
   item: ListItemWithUser
   readOnly?: boolean
+  index: number
+  total: number
   onCheck: (item: ListItemWithUser) => void
   onDefer: (item: ListItemWithUser) => void
   onTap: (item: ListItemWithUser) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
   const user = item.added_by_user
@@ -263,8 +273,28 @@ function ActiveItem({
   const color = item.added_by ? userColor(item.added_by) : 'bg-gray-100 text-gray-400'
 
   return (
-    <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5
-                    shadow-sm border border-gray-100 active:scale-[0.99] transition-transform">
+    <div className="flex items-center gap-2 bg-white rounded-2xl px-3 py-3
+                    shadow-sm border border-gray-100">
+      {/* Move arrows */}
+      <div className="flex flex-col gap-0.5 flex-shrink-0">
+        <button
+          onClick={onMoveUp}
+          disabled={index === 0}
+          className="w-6 h-6 rounded flex items-center justify-center
+                     text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
+        >
+          <MoveUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={index === total - 1}
+          className="w-6 h-6 rounded flex items-center justify-center
+                     text-gray-300 hover:text-primary-600 disabled:opacity-20 transition-colors"
+        >
+          <MoveDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       {/* User initial circle */}
       {initial && (
         <div className={`w-7 h-7 rounded-full flex items-center justify-center
@@ -610,6 +640,67 @@ export default function ShopPage() {
   const pct       = total > 0 ? Math.round((checked.length / total) * 100) : 0
   const v = selectedStore ? storeVisual(selectedStore.name) : null
 
+  // ── custom sort order (localStorage) ──
+  const [customOrder, setCustomOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('shopItemOrder')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+
+  // Save order to localStorage when it changes
+  useEffect(() => {
+    if (customOrder.length > 0) {
+      localStorage.setItem('shopItemOrder', JSON.stringify(customOrder))
+    }
+  }, [customOrder])
+
+  // Group active items by category, sorted by category order then custom order
+  const groupedActive = useMemo(() => {
+    // Classify each item
+    const withCat = active.map(item => ({
+      item,
+      category: classifyItem(item.name),
+    }))
+
+    // Apply custom order within categories
+    const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
+    withCat.sort((a, b) => {
+      const catA = CATEGORY_ORDER.indexOf(a.category.id)
+      const catB = CATEGORY_ORDER.indexOf(b.category.id)
+      if (catA !== catB) return catA - catB
+      const oA = orderMap.get(a.item.id) ?? 9999
+      const oB = orderMap.get(b.item.id) ?? 9999
+      return oA - oB
+    })
+
+    // Group by category
+    const groups: { category: Category; items: ListItemWithUser[] }[] = []
+    let currentCat: string | null = null
+    for (const { item, category } of withCat) {
+      if (category.id !== currentCat) {
+        groups.push({ category, items: [] })
+        currentCat = category.id
+      }
+      groups[groups.length - 1].items.push(item)
+    }
+    return groups
+  }, [active, customOrder])
+
+  // Flat sorted list for move operations
+  const flatActive = useMemo(() => groupedActive.flatMap(g => g.items), [groupedActive])
+
+  function moveItem(itemId: string, direction: 'up' | 'down') {
+    const idx = flatActive.findIndex(i => i.id === itemId)
+    if (idx < 0) return
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= flatActive.length) return
+
+    const newOrder = flatActive.map(i => i.id)
+    ;[newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]]
+    setCustomOrder(newOrder)
+  }
+
   // ════════════════════════════════════════
   // SCREENS
   // ════════════════════════════════════════
@@ -748,16 +839,35 @@ export default function ShopPage() {
           </div>
         </div>
 
-        {/* ── Active items ── */}
+        {/* ── Active items grouped by category ── */}
         {active.length > 0 ? (
-          <div className="space-y-2">
-            {active.map(item => (
-              <ActiveItem
-                key={item.id} item={item}
-                readOnly={!canEdit(profile!.role)}
-                onCheck={checkItem} onDefer={deferItem}
-                onTap={setDetailItem}
-              />
+          <div className="space-y-3">
+            {groupedActive.map(group => (
+              <div key={group.category.id}>
+                {/* Category header */}
+                <div className="flex items-center gap-2 px-1 mb-1.5">
+                  <span className="text-base">{group.category.emoji}</span>
+                  <span className="text-xs font-bold text-gray-500">{group.category.label}</span>
+                  <span className="text-xs text-gray-300">({group.items.length})</span>
+                </div>
+                <div className="space-y-1.5">
+                  {group.items.map(item => {
+                    const flatIdx = flatActive.indexOf(item)
+                    return (
+                      <ActiveItem
+                        key={item.id} item={item}
+                        readOnly={!canEdit(profile!.role)}
+                        index={flatIdx}
+                        total={flatActive.length}
+                        onCheck={checkItem} onDefer={deferItem}
+                        onTap={setDetailItem}
+                        onMoveUp={() => moveItem(item.id, 'up')}
+                        onMoveDown={() => moveItem(item.id, 'down')}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         ) : (
