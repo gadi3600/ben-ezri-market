@@ -69,7 +69,7 @@ export default function ListPage() {
   const [newName, setNewName]     = useState('')
   const [newQty, setNewQty]       = useState('1')
   const [loading, setLoading]     = useState(true)
-  const [adding, setAdding]       = useState(false)
+  const addingRef = useRef(false)
   const [creatingList, setCreatingList] = useState(false)
   const [allSuggestions, setAllSuggestions] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
@@ -110,7 +110,7 @@ export default function ListPage() {
   }, [list?.id])
 
   async function loadSuggestions() {
-    const { data } = await supabase.from('purchase_items').select('name')
+    const { data } = await supabase.from('list_items').select('name')
     if (data) {
       const unique = [...new Set(data.map(r => r.name as string).filter(Boolean))]
       setAllSuggestions(unique)
@@ -157,11 +157,13 @@ export default function ListPage() {
   }
 
   async function addItem() {
-    if (!newName.trim() || !list || adding) return
-    setAdding(true)
+    if (!newName.trim() || !list || addingRef.current) return
+    addingRef.current = true
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) : 0
     const trimmedName = newName.trim()
     const qty = parseFloat(newQty) || 1
+    setNewName('')
+    setNewQty('1')
     const { data } = await supabase.from('list_items').insert({
       list_id:   list.id,
       name:      trimmedName,
@@ -175,11 +177,13 @@ export default function ListPage() {
         if (prev.some(i => i.id === data.id)) return prev
         return [...prev, data]
       })
+      // Add newly added name to suggestions for immediate reuse
+      setAllSuggestions(prev =>
+        prev.includes(trimmedName) ? prev : [...prev, trimmedName]
+      )
     }
-    setNewName('')
-    setNewQty('1')
-    setAdding(false)
-    setTimeout(() => inputRef.current?.focus(), 50)
+    addingRef.current = false
+    setTimeout(() => inputRef.current?.focus(), 100)
   }
 
   async function toggleItem(item: ListItem) {
@@ -338,7 +342,7 @@ export default function ListPage() {
           {/* Add button */}
           <button
             onClick={addItem}
-            disabled={!newName.trim() || adding}
+            disabled={!newName.trim()}
             className="bg-primary-600 hover:bg-primary-700 active:bg-primary-800 disabled:opacity-40
                        text-white rounded-xl w-12 h-12 flex items-center justify-center flex-shrink-0
                        transition-colors shadow-sm"
