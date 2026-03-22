@@ -55,6 +55,7 @@ export default function ReceiptModal({
   const [error, setError]                     = useState<string | null>(null)
   const [skippedCount, setSkippedCount]       = useState(0)
   const [savedCount, setSavedCount]           = useState(0)
+  const [analyzedCount, setAnalyzedCount]     = useState(0)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
 
@@ -138,6 +139,7 @@ export default function ReceiptModal({
         .createSignedUrls(paths, 300)
 
       const imageUrls = (signed ?? []).map(s => s.signedUrl).filter(Boolean)
+      setAnalyzedCount(imageUrls.length)
       console.log(`🔍 Sending ${imageUrls.length} image URLs to analyze-receipt`)
 
       if (imageUrls.length > 0) {
@@ -369,7 +371,9 @@ export default function ReceiptModal({
                 <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
               </div>
               <div className="text-center">
-                <p className="font-bold text-gray-700">מנתח חשבונית עם AI...</p>
+                <p className="font-bold text-gray-700">
+                  מנתח {analyzedCount} {analyzedCount === 1 ? 'תמונה' : 'תמונות'} עם AI...
+                </p>
                 <p className="text-sm text-gray-400 mt-1">זה עשוי לקחת כמה שניות</p>
               </div>
             </div>
@@ -445,6 +449,7 @@ export default function ReceiptModal({
 
               <p className="text-xs text-center text-gray-400">
                 ✓ {savedCount} {savedCount === 1 ? 'תמונה נשמרה' : 'תמונות נשמרו'}
+                {analyzedCount > 0 && ` · נותחו ${analyzedCount} ${analyzedCount === 1 ? 'תמונה' : 'תמונות'} בהצלחה`}
               </p>
             </div>
           )}
