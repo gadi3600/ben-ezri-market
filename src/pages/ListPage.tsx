@@ -231,22 +231,39 @@ function ItemRow({
     : null
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
 
-  function handleTouchStart() {
-    longPressTimer.current = setTimeout(() => {
-      onLongPress()
-      onToggleSelect(item.id)
-    }, 500)
-  }
-
-  function handleTouchEnd() {
+  function clearLongPress() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
   }
 
-  function handleClick() {
+  function handleTouchStart(e: React.TouchEvent | React.MouseEvent) {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      // Prevent context menu on mobile
+      onLongPress()
+      onToggleSelect(item.id)
+    }, 500)
+    // Prevent text selection during long press
+    e.preventDefault?.()
+  }
+
+  function handleTouchEnd() {
+    clearLongPress()
+  }
+
+  function handleClick(e: React.MouseEvent) {
+    // Don't trigger click if long press just fired
+    if (longPressFired.current) {
+      e.preventDefault()
+      e.stopPropagation()
+      longPressFired.current = false
+      return
+    }
     if (selectMode) {
       onToggleSelect(item.id)
     }
@@ -254,16 +271,18 @@ function ItemRow({
 
   return (
     <div
-      className={`bg-white rounded-2xl px-4 py-3 shadow-sm border transition-all duration-150 ${
+      className={`bg-white rounded-2xl px-4 py-3 shadow-sm border transition-all duration-150 select-none ${
         selected ? 'border-primary-300 bg-primary-50/40' : 'border-gray-100'
       }`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
+      onTouchMove={clearLongPress}
+      onTouchCancel={clearLongPress}
       onMouseDown={handleTouchStart}
       onMouseUp={handleTouchEnd}
-      onMouseLeave={handleTouchEnd}
+      onMouseLeave={clearLongPress}
       onClick={handleClick}
+      onContextMenu={e => e.preventDefault()}
     >
       <div className="flex items-center gap-3">
         {/* Selection checkbox (in select mode) */}
