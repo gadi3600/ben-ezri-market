@@ -339,15 +339,15 @@ function ActiveItem({
 
       {/* Name + qty — tappable area */}
       <button onClick={() => onTap(item)} className="flex-1 min-w-0 text-right relative">
-        <div className="flex items-center gap-1.5">
-          <p className="text-base font-semibold text-gray-800 leading-tight truncate">
+        <div className="flex items-start gap-1.5">
+          <p className="text-base font-semibold text-gray-800 leading-tight whitespace-normal break-words">
             {item.name}
             {item.quantity !== 1 && (
               <span className="text-sm font-bold text-gray-400 mr-1">×{item.quantity}</span>
             )}
           </p>
           {hasExtra && (
-            <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+            <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0 mt-1.5" />
           )}
         </div>
       </button>
@@ -689,26 +689,31 @@ export default function ShopPage() {
     }
   }, [customOrder])
 
-  // Group active items by category, sorted by category order then custom order
+  // Group active items by category, respecting custom order for cross-category moves
   const groupedActive = useMemo(() => {
-    // Classify each item
     const withCat = active.map(item => ({
       item,
       category: classifyItem(item.name),
     }))
 
-    // Apply custom order within categories
-    const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
-    withCat.sort((a, b) => {
-      const catA = CATEGORY_ORDER.indexOf(a.category.id)
-      const catB = CATEGORY_ORDER.indexOf(b.category.id)
-      if (catA !== catB) return catA - catB
-      const oA = orderMap.get(a.item.id) ?? 9999
-      const oB = orderMap.get(b.item.id) ?? 9999
-      return oA - oB
-    })
+    if (customOrder.length > 0) {
+      // Custom order mode: sort entirely by saved order, group by consecutive category
+      const orderMap = new Map(customOrder.map((id, idx) => [id, idx]))
+      withCat.sort((a, b) => {
+        const oA = orderMap.get(a.item.id) ?? 9999
+        const oB = orderMap.get(b.item.id) ?? 9999
+        return oA - oB
+      })
+    } else {
+      // Default: sort by category order
+      withCat.sort((a, b) => {
+        const catA = CATEGORY_ORDER.indexOf(a.category.id)
+        const catB = CATEGORY_ORDER.indexOf(b.category.id)
+        return catA - catB
+      })
+    }
 
-    // Group by category
+    // Group by consecutive category
     const groups: { category: Category; items: ListItemWithUser[] }[] = []
     let currentCat: string | null = null
     for (const { item, category } of withCat) {
