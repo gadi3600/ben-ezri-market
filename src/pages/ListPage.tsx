@@ -8,7 +8,12 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription, sendPushToFamily } from '../lib/push'
 import { canEdit, isAdmin } from '../lib/permissions'
+import { classifyItem, CATEGORY_ORDER, CAT, OTHER } from '../lib/categories'
+import type { Category } from '../lib/categories'
 import type { ShoppingList, ListItem } from '../lib/types'
+
+const ALL_CATS: Record<string, Category> = { ...CAT, other: OTHER }
+const ALL_CATEGORIES = CATEGORY_ORDER.map(id => ALL_CATS[id]).filter(Boolean)
 
 // Extended item with joined user info
 interface ListItemWithUser extends ListItem {
@@ -207,26 +212,31 @@ function ItemRow({
   readOnly,
   selectMode,
   selected,
+  itemCategory,
   onQtyChange,
   onDelete,
   onEdit,
   onLightbox,
   onToggleSelect,
+  onChangeCategory,
 }: {
   item: ListItemWithUser
   currentUserId: string
   readOnly?: boolean
   selectMode?: boolean
   selected?: boolean
+  itemCategory: Category
   onQtyChange: (id: string, qty: number) => void
   onDelete: (id: string) => void
   onEdit: (item: ListItemWithUser) => void
   onLightbox: (src: string) => void
   onToggleSelect: (id: string) => void
+  onChangeCategory: (catId: string) => void
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
     : null
+  const [showCatPicker, setShowCatPicker] = useState(false)
 
   return (
     <div
@@ -245,6 +255,41 @@ function ItemRow({
           }`}>
             {selected && <CheckCircle2 className="w-3.5 h-3.5" />}
           </div>
+        )}
+
+        {/* Category emoji picker */}
+        {!selectMode && !readOnly && (
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); setShowCatPicker(v => !v) }}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm
+                         hover:bg-gray-100 active:bg-gray-200 transition-colors"
+            >
+              {itemCategory.emoji}
+            </button>
+            {showCatPicker && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
+                <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
+                                overflow-hidden w-44 max-h-64 overflow-y-auto">
+                  {ALL_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.id}
+                      onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false) }}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
+                                 ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <span className="text-base">{cat.emoji}</span>
+                      <span>{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {!selectMode && readOnly && (
+          <span className="text-sm flex-shrink-0">{itemCategory.emoji}</span>
         )}
 
         {/* Thumbnail */}
@@ -340,6 +385,9 @@ export default function ListPage() {
   const [selectMode, setSelectMode]   = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // Saved categories from DB
+  const [savedCats, setSavedCats] = useState<Record<string, string>>({})
+
   const inputRef       = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -353,6 +401,51 @@ export default function ListPage() {
         .filter(s => s.toLowerCase().includes(newName.toLowerCase()))
         .slice(0, 5)
     : []
+
+  function getItemCategory(item: ListItemWithUser): Category {
+    const savedId = savedCats[item.name]
+    if (savedId && ALL_CATS[savedId]) return ALL_CATS[savedId]
+    return classifyItem(item.name)
+  }
+
+  async function loadSavedCategories(names: string[]) {
+    if (!profile?.family_id || names.length === 0) return
+    const { data } = await supabase
+      .from('item_categories')
+      .select('name, category')
+      .eq('family_id', profile.family_id)
+      .in('name', names)
+    if (data) {
+      const map: Record<string, string> = {}
+      for (const r of data) map[r.name] = r.category
+      setSavedCats(map)
+    }
+  }
+
+  function changeItemCategory(itemId: string, newCatId: string) {
+    const item = items.find(i => i.id === itemId)
+    if (!item || !profile?.family_id) return
+    setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
+    supabase.from('item_categories').upsert({
+      name: item.name,
+      category: newCatId,
+      family_id: profile.family_id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'name,family_id' })
+  }
+
+  // Group items by category
+  const groupedItems = (() => {
+    const catMap = new Map<string, { category: Category; items: ListItemWithUser[] }>()
+    for (const item of items) {
+      const cat = getItemCategory(item)
+      if (!catMap.has(cat.id)) catMap.set(cat.id, { category: cat, items: [] })
+      catMap.get(cat.id)!.items.push(item)
+    }
+    return [...catMap.values()].sort((a, b) =>
+      CATEGORY_ORDER.indexOf(a.category.id) - CATEGORY_ORDER.indexOf(b.category.id)
+    )
+  })()
 
   useEffect(() => {
     if (!profile?.family_id) return
@@ -438,7 +531,9 @@ export default function ListPage() {
         .select('*, added_by_user:users!added_by(id, full_name)')
         .eq('list_id', data.id)
         .order('sort_order', { ascending: true })
-      setItems((itemData as ListItemWithUser[]) ?? [])
+      const loaded = (itemData as ListItemWithUser[]) ?? []
+      setItems(loaded)
+      loadSavedCategories([...new Set(loaded.map(i => i.name))])
     } else {
       setList(null)
       setItems([])
@@ -718,20 +813,33 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* Items */}
+      {/* Items grouped by category */}
       {itemCount > 0 && (
-        <div className="space-y-2 mb-4">
-          {items.map(item => (
-            <ItemRow
-              key={item.id} item={item}
-              currentUserId={profile!.id}
-              readOnly={!canEdit(profile!.role)}
-              selectMode={selectMode}
-              selected={selectedIds.has(item.id)}
-              onQtyChange={updateQty} onDelete={deleteItem}
-              onEdit={setEditingItem} onLightbox={setLightboxSrc}
-              onToggleSelect={toggleSelect}
-            />
+        <div className="space-y-3 mb-4">
+          {groupedItems.map(group => (
+            <div key={group.category.id}>
+              <div className="flex items-center gap-2 px-1 mb-1.5">
+                <span className="text-base">{group.category.emoji}</span>
+                <span className="text-xs font-bold text-gray-500">{group.category.label}</span>
+                <span className="text-xs text-gray-300">({group.items.length})</span>
+              </div>
+              <div className="space-y-1.5">
+                {group.items.map(item => (
+                  <ItemRow
+                    key={item.id} item={item}
+                    currentUserId={profile!.id}
+                    readOnly={!canEdit(profile!.role)}
+                    selectMode={selectMode}
+                    selected={selectedIds.has(item.id)}
+                    itemCategory={getItemCategory(item)}
+                    onQtyChange={updateQty} onDelete={deleteItem}
+                    onEdit={setEditingItem} onLightbox={setLightboxSrc}
+                    onToggleSelect={toggleSelect}
+                    onChangeCategory={catId => changeItemCategory(item.id, catId)}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { classifyItem, CAT, OTHER } from '../lib/categories'
+import type { Category } from '../lib/categories'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,14 @@ function ListDetailModal({
   const [selected, setSelected]   = useState<Set<string>>(new Set())
   const [loading, setLoading]     = useState(true)
   const [importing, setImporting] = useState(false)
+  const [savedCats, setSavedCats] = useState<Record<string, string>>({})
+
+  const allCats: Record<string, Category> = { ...CAT, other: OTHER }
+  function getCatEmoji(name: string): string {
+    const savedId = savedCats[name]
+    if (savedId && allCats[savedId]) return allCats[savedId].emoji
+    return classifyItem(name).emoji
+  }
 
   useEffect(() => {
     loadItems()
@@ -117,6 +127,21 @@ function ListDetailModal({
 
     setItems(rows)
     setSelected(new Set(rows.map(i => i.id)))
+
+    // Load saved categories
+    const names = [...new Set(rows.map(r => r.name))]
+    if (names.length > 0) {
+      const { data: catData } = await supabase
+        .from('item_categories')
+        .select('name, category')
+        .in('name', names)
+      if (catData) {
+        const map: Record<string, string> = {}
+        for (const r of catData) map[r.name] = r.category
+        setSavedCats(map)
+      }
+    }
+
     setLoading(false)
   }
 
@@ -215,7 +240,10 @@ function ListDetailModal({
 
                   {/* Name + purchase info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      <span className="ml-1">{getCatEmoji(item.name)}</span>
+                      {item.name}
+                    </p>
                     {storeName && (
                       <p className="text-[11px] text-gray-400 truncate mt-0.5">
                         🏪 נרכש ב{storeName}{purchasedDate && ` · ${purchasedDate}`}
