@@ -161,31 +161,23 @@ export default function SettingsPage() {
   }
 
   async function sendInvite() {
-    alert(`DEBUG sendInvite called!\nemail: "${newInviteEmail}"\nfamily_id: ${profile?.family_id ?? 'NULL'}\ninviting: ${inviting}\nrole: ${profile?.role ?? 'NULL'}`)
     if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
     setInviting(true)
 
-    const payload = {
+    const { data, error } = await supabase.from('invites').insert({
       email:      newInviteEmail.trim().toLowerCase(),
       role:       newInviteRole,
       family_id:  profile.family_id,
       invited_by: profile.id,
-    }
-
-    alert(`שולח הזמנה...\nfamily_id: ${payload.family_id}\nemail: ${payload.email}\nrole: ${payload.role}\nprofile.role: ${profile.role}`)
-
-    const { data, error } = await supabase.from('invites').insert(payload).select('id').single()
+    }).select('id').single()
 
     if (error) {
-      alert(`שגיאה מסופאבייס:\ncode: ${error.code}\nmessage: ${error.message}\ndetails: ${error.details ?? 'none'}\nhint: ${error.hint ?? 'none'}`)
+      console.error('sendInvite error:', error)
     } else if (data) {
       const link = inviteLink(data.id, newInviteRole)
       copyToClipboard(link)
-      alert(`הזמנה נוצרה בהצלחה!\n\nלינק:\n${link}`)
       setNewInviteEmail('')
       await loadInvites(profile.family_id)
-    } else {
-      alert('תגובה לא צפויה: אין data ואין error')
     }
     setInviting(false)
   }
