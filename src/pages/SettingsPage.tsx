@@ -101,6 +101,14 @@ export default function SettingsPage() {
   }
 
   async function deleteStore(id: string, name: string) {
+    const { count } = await supabase
+      .from('purchases')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', id)
+    if ((count ?? 0) > 0) {
+      alert(`לא ניתן למחוק את החנות כי יש ${count} קניות משויכות אליה`)
+      return
+    }
     if (!confirm(`למחוק את "${name}"?`)) return
     const { error } = await supabase.from('stores').delete().eq('id', id)
     if (!error) setStores(prev => prev.filter(s => s.id !== id))
