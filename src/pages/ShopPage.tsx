@@ -728,19 +728,19 @@ export default function ShopPage() {
     return dedup(sorted)
   }, [active, customOrder, defaultSorted])
 
-  // Group flat list into consecutive category sections (for display only)
+  // Group flat list by unique category (each category appears once)
+  // Category order = position of its first item in flatActive
   const groupedActive = useMemo(() => {
-    const groups: { category: Category; items: ListItemWithUser[] }[] = []
-    let currentCat: string | null = null
-    for (const item of flatActive) {
+    const catMap = new Map<string, { category: Category; items: ListItemWithUser[]; firstIdx: number }>()
+    flatActive.forEach((item, idx) => {
       const cat = classifyItem(item.name)
-      if (cat.id !== currentCat) {
-        groups.push({ category: cat, items: [] })
-        currentCat = cat.id
+      if (!catMap.has(cat.id)) {
+        catMap.set(cat.id, { category: cat, items: [], firstIdx: idx })
       }
-      groups[groups.length - 1].items.push(item)
-    }
-    return groups
+      catMap.get(cat.id)!.items.push(item)
+    })
+    // Sort categories by position of their first item
+    return [...catMap.values()].sort((a, b) => a.firstIdx - b.firstIdx)
   }, [flatActive])
 
   function moveItem(itemId: string, direction: 'up' | 'down') {
