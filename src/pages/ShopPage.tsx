@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
 import ReceiptModal from '../components/ReceiptModal'
+import ImageLightbox from '../components/ImageLightbox'
 
 // ── Store visual config ───────────────────────────────────────────────────────
 
@@ -163,29 +164,93 @@ function StorePickerModal({
   )
 }
 
+// ── ItemDetailModal — shows full item details in ShopPage ────────────────────
+
+function ItemDetailModal({
+  item,
+  onClose,
+  onLightbox,
+}: {
+  item: ListItem
+  onClose: () => void
+  onLightbox: (src: string) => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl shadow-2xl w-[90%] max-w-sm mx-auto p-5">
+        <button
+          onClick={onClose}
+          className="absolute top-3 left-3 p-2 rounded-xl text-gray-400 hover:bg-gray-100 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <h3 className="text-lg font-extrabold text-gray-800 mb-3 pl-10">{item.name}</h3>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-400">כמות:</span>
+            <span className="font-bold text-gray-800">{item.quantity} {item.unit}</span>
+          </div>
+
+          {item.note && (
+            <div>
+              <span className="text-sm text-gray-400">הערה:</span>
+              <p className="text-sm text-gray-700 mt-1 bg-gray-50 rounded-xl px-3 py-2">
+                {item.note}
+              </p>
+            </div>
+          )}
+
+          {item.image_url && (
+            <button onClick={() => { onClose(); onLightbox(item.image_url!) }} className="w-full">
+              <img
+                src={item.image_url}
+                alt=""
+                className="w-full max-h-48 object-cover rounded-2xl border border-gray-100"
+              />
+              <p className="text-xs text-gray-400 mt-1">לחץ להגדלה</p>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ActiveItem ────────────────────────────────────────────────────────────────
 
 function ActiveItem({
   item,
   onCheck,
   onDefer,
+  onTap,
 }: {
   item: ListItem
   onCheck: (item: ListItem) => void
   onDefer: (item: ListItem) => void
+  onTap: (item: ListItem) => void
 }) {
+  const hasExtra = !!(item.note || item.image_url)
+
   return (
     <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5
                     shadow-sm border border-gray-100 active:scale-[0.99] transition-transform">
-      {/* Name + qty */}
-      <div className="flex-1 min-w-0">
-        <p className="text-base font-semibold text-gray-800 leading-tight truncate">{item.name}</p>
+      {/* Name + qty — tappable area */}
+      <button onClick={() => onTap(item)} className="flex-1 min-w-0 text-right relative">
+        <div className="flex items-center gap-1.5">
+          <p className="text-base font-semibold text-gray-800 leading-tight truncate">{item.name}</p>
+          {hasExtra && (
+            <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+          )}
+        </div>
         {(item.quantity !== 1 || item.unit !== 'יחידה') && (
           <p className="text-xs text-gray-400 mt-0.5">{item.quantity} {item.unit}</p>
         )}
-      </div>
+      </button>
 
-      {/* ✓ לעגלה — מימין (first button = rightmost in RTL) */}
+      {/* ✓ לעגלה */}
       <button
         onClick={() => onCheck(item)}
         className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl
@@ -196,7 +261,7 @@ function ActiveItem({
         <span>לעגלה</span>
       </button>
 
-      {/* → להמשך — משמאל (second button = leftmost in RTL) */}
+      {/* → להמשך */}
       <button
         onClick={() => onDefer(item)}
         className="flex items-center gap-1 px-3 py-2.5 rounded-xl
@@ -268,6 +333,10 @@ export default function ShopPage() {
   const [showDeferred, setShowDeferred] = useState(true)
   const [doneState, setDoneState]     = useState<DoneState>('idle')
   const [deferredCount, setDeferredCount] = useState(0)
+
+  // detail modal & lightbox
+  const [detailItem, setDetailItem]     = useState<ListItem | null>(null)
+  const [lightboxSrc, setLightboxSrc]   = useState<string | null>(null)
 
   // receipt modal
   const [completedPurchaseId, setCompletedPurchaseId] = useState<string | null>(null)
@@ -528,6 +597,20 @@ export default function ShopPage() {
 
   return (
     <>
+      {/* ── Lightbox ── */}
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+
+      {/* ── Item Detail Modal ── */}
+      {detailItem && (
+        <ItemDetailModal
+          item={detailItem}
+          onClose={() => setDetailItem(null)}
+          onLightbox={setLightboxSrc}
+        />
+      )}
+
       {/* ── Store Picker Modal ── */}
       {showPicker && (
         <StorePickerModal
@@ -598,7 +681,11 @@ export default function ShopPage() {
         {active.length > 0 ? (
           <div className="space-y-2">
             {active.map(item => (
-              <ActiveItem key={item.id} item={item} onCheck={checkItem} onDefer={deferItem} />
+              <ActiveItem
+                key={item.id} item={item}
+                onCheck={checkItem} onDefer={deferItem}
+                onTap={setDetailItem}
+              />
             ))}
           </div>
         ) : (

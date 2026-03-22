@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera } from 'lucide-react'
+import {
+  Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera,
+  X, MessageSquare, Pencil,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem } from '../lib/types'
+import ImageLightbox from '../components/ImageLightbox'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -18,17 +22,180 @@ async function uploadItemImage(file: File, familyId: string, listId: string): Pr
   return data?.publicUrl ?? null
 }
 
+// ── EditItemModal ────────────────────────────────────────────────────────────
+
+function EditItemModal({
+  item,
+  familyId,
+  listId,
+  onSave,
+  onClose,
+  onLightbox,
+}: {
+  item: ListItem
+  familyId: string
+  listId: string
+  onSave: (id: string, updates: Partial<ListItem>) => void
+  onClose: () => void
+  onLightbox: (src: string) => void
+}) {
+  const [qty, setQty]       = useState(item.quantity)
+  const [note, setNote]     = useState(item.note ?? '')
+  const [imageUrl, setImageUrl] = useState(item.image_url)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function handleImageChange(file: File) {
+    setUploading(true)
+    const url = await uploadItemImage(file, familyId, listId)
+    if (url) setImageUrl(url)
+    setUploading(false)
+  }
+
+  function save() {
+    onSave(item.id, {
+      quantity:  qty,
+      note:      note.trim() || null,
+      image_url: imageUrl,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-t-3xl shadow-2xl max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-gray-200" />
+        </div>
+
+        <div className="px-5 pb-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5 mt-2">
+            <h2 className="text-lg font-extrabold text-gray-800 truncate flex-1">{item.name}</h2>
+            <button onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Qty */}
+          <label className="block text-sm font-semibold text-gray-600 mb-2">כמות</label>
+          <div className="flex items-center gap-3 mb-5">
+            <button
+              onClick={() => setQty(q => Math.max(1, q - 1))}
+              className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center
+                         text-gray-500 hover:bg-gray-200 active:bg-gray-300 transition-colors"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <span className="text-2xl font-extrabold text-gray-800 w-12 text-center">{qty}</span>
+            <button
+              onClick={() => setQty(q => q + 1)}
+              className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center
+                         text-gray-500 hover:bg-gray-200 active:bg-gray-300 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Note */}
+          <label className="block text-sm font-semibold text-gray-600 mb-2">
+            <MessageSquare className="w-3.5 h-3.5 inline ml-1" />
+            הערה
+          </label>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            className="input min-h-[80px] mb-5 resize-none text-sm"
+            placeholder="הערה לפריט..."
+            rows={3}
+          />
+
+          {/* Image */}
+          <label className="block text-sm font-semibold text-gray-600 mb-2">
+            <Camera className="w-3.5 h-3.5 inline ml-1" />
+            תמונה
+          </label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) handleImageChange(f)
+              e.target.value = ''
+            }}
+          />
+
+          {imageUrl ? (
+            <div className="flex items-center gap-3 mb-5">
+              <button onClick={() => onLightbox(imageUrl!)} className="flex-shrink-0">
+                <img src={imageUrl} alt="" className="w-16 h-16 rounded-xl object-cover border border-gray-100" />
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="text-xs text-primary-600 font-medium px-3 py-1.5 rounded-lg
+                             bg-primary-50 hover:bg-primary-100 transition-colors"
+                >
+                  החלף
+                </button>
+                <button
+                  onClick={() => setImageUrl(null)}
+                  className="text-xs text-red-500 font-medium px-3 py-1.5 rounded-lg
+                             bg-red-50 hover:bg-red-100 transition-colors"
+                >
+                  הסר
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl w-full mb-5
+                         border-2 border-dashed border-gray-200 text-gray-400
+                         hover:border-primary-300 hover:text-primary-500 text-sm font-medium transition-colors"
+            >
+              {uploading ? (
+                <div className="w-4 h-4 border-2 border-primary-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+              {uploading ? 'מעלה...' : 'הוסף תמונה'}
+            </button>
+          )}
+
+          {/* Save */}
+          <button onClick={save} className="btn-primary w-full">
+            <CheckCircle2 className="w-4 h-4" />
+            שמור שינויים
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Item row ────────────────────────────────────────────────────────────────
 
 function ItemRow({
   item,
   onToggle,
   onDelete,
+  onEdit,
+  onLightbox,
 }: {
   item: ListItem
   onToggle: (item: ListItem) => void
   onDelete: (id: string) => void
+  onEdit: (item: ListItem) => void
+  onLightbox: (src: string) => void
 }) {
+  const hasExtra = !!(item.note || item.image_url)
+
   return (
     <div
       className={`flex items-center gap-3 bg-white rounded-2xl px-4 py-3.5 shadow-sm border transition-all duration-200 ${
@@ -49,33 +216,55 @@ function ItemRow({
 
       {/* Thumbnail */}
       {item.image_url && (
-        <img
-          src={item.image_url}
-          alt=""
-          className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-gray-100"
-        />
+        <button onClick={() => onLightbox(item.image_url!)} className="flex-shrink-0">
+          <img
+            src={item.image_url}
+            alt=""
+            className="w-10 h-10 rounded-xl object-cover border border-gray-100"
+          />
+        </button>
       )}
 
-      {/* Name + qty */}
-      <div className="flex-1 min-w-0">
-        <span
-          className={`text-base font-medium leading-tight block truncate ${
-            item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'
-          }`}
-        >
-          {item.name}
-        </span>
-        {(item.quantity !== 1 || item.unit !== 'יחידה') && (
-          <span className="text-xs text-gray-400">
-            {item.quantity} {item.unit}
+      {/* Name + qty + note indicator — tappable to edit */}
+      <button onClick={() => onEdit(item)} className="flex-1 min-w-0 text-right">
+        <div className="flex items-center gap-1">
+          <span
+            className={`text-base font-medium leading-tight block truncate ${
+              item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'
+            }`}
+          >
+            {item.name}
           </span>
-        )}
-      </div>
+          {hasExtra && (
+            <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {(item.quantity !== 1 || item.unit !== 'יחידה') && (
+            <span className="text-xs text-gray-400">
+              {item.quantity} {item.unit}
+            </span>
+          )}
+          {item.note && (
+            <span className="text-xs text-gray-400 truncate max-w-[120px]">
+              📝 {item.note}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Edit icon */}
+      <button
+        onClick={() => onEdit(item)}
+        className="p-1.5 text-gray-200 hover:text-primary-400 transition-colors flex-shrink-0"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
 
       {/* Delete */}
       <button
         onClick={() => onDelete(item.id)}
-        className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors"
+        className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
       >
         <Trash2 className="w-4 h-4" />
       </button>
@@ -96,6 +285,10 @@ export default function ListPage() {
   const [allSuggestions, setAllSuggestions] = useState<string[]>([])
   const [dupError, setDupError]   = useState<string | null>(null)
   const [pendingImage, setPendingImage] = useState<File | null>(null)
+
+  // Edit & lightbox
+  const [editingItem, setEditingItem]     = useState<ListItem | null>(null)
+  const [lightboxSrc, setLightboxSrc]     = useState<string | null>(null)
 
   const inputRef     = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -242,10 +435,15 @@ export default function ListPage() {
     inputRef.current?.focus()
   }, [newName, newQty, pendingImage, list, items, profile])
 
+  async function saveItemEdit(id: string, updates: Partial<ListItem>) {
+    // Optimistic
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i))
+    await supabase.from('list_items').update(updates).eq('id', id)
+  }
+
   async function toggleItem(item: ListItem) {
     const now = new Date().toISOString()
     const checked = !item.is_checked
-    // Optimistic
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_checked: checked } : i))
     await supabase.from('list_items').update({
       is_checked: checked,
@@ -289,6 +487,23 @@ export default function ListPage() {
   return (
     <div className="pb-36">
 
+      {/* ── Lightbox ── */}
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+      )}
+
+      {/* ── Edit modal ── */}
+      {editingItem && profile?.family_id && (
+        <EditItemModal
+          item={editingItem}
+          familyId={profile.family_id}
+          listId={list.id}
+          onSave={saveItemEdit}
+          onClose={() => setEditingItem(null)}
+          onLightbox={src => { setEditingItem(null); setLightboxSrc(src) }}
+        />
+      )}
+
       {/* Header card */}
       <div className="card-green mb-4 flex items-center justify-between">
         <div>
@@ -329,7 +544,11 @@ export default function ListPage() {
       {unchecked.length > 0 && (
         <div className="space-y-2 mb-4">
           {unchecked.map(item => (
-            <ItemRow key={item.id} item={item} onToggle={toggleItem} onDelete={deleteItem} />
+            <ItemRow
+              key={item.id} item={item}
+              onToggle={toggleItem} onDelete={deleteItem}
+              onEdit={setEditingItem} onLightbox={setLightboxSrc}
+            />
           ))}
         </div>
       )}
@@ -343,7 +562,11 @@ export default function ListPage() {
           </div>
           <div className="space-y-2 opacity-55">
             {checked.map(item => (
-              <ItemRow key={item.id} item={item} onToggle={toggleItem} onDelete={deleteItem} />
+              <ItemRow
+                key={item.id} item={item}
+                onToggle={toggleItem} onDelete={deleteItem}
+                onEdit={setEditingItem} onLightbox={setLightboxSrc}
+              />
             ))}
           </div>
         </>
@@ -416,7 +639,20 @@ export default function ListPage() {
             </div>
           )}
 
+          {/* Row: Name | Qty | Camera | Add */}
           <div className="flex gap-2 items-center">
+            {/* Name — first (rightmost in RTL) */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={newName}
+              onChange={e => { setNewName(e.target.value); setDupError(null) }}
+              onKeyDown={e => e.key === 'Enter' && addItem()}
+              className="input flex-1"
+              placeholder="הוסף מוצר..."
+              autoComplete="off"
+            />
+
             {/* Qty controls */}
             <div className="flex items-center bg-gray-50 rounded-xl border border-gray-200 flex-shrink-0">
               <button
@@ -452,18 +688,6 @@ export default function ListPage() {
             >
               <Camera className="w-5 h-5" />
             </button>
-
-            {/* Name */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={newName}
-              onChange={e => { setNewName(e.target.value); setDupError(null) }}
-              onKeyDown={e => e.key === 'Enter' && addItem()}
-              className="input flex-1"
-              placeholder="הוסף מוצר..."
-              autoComplete="off"
-            />
 
             {/* Add button */}
             <button
