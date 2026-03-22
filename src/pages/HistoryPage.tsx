@@ -346,6 +346,26 @@ export default function HistoryPage() {
     setEditingAmount(null)
   }
 
+  async function deletePurchase(purchase: PurchaseRow) {
+    if (!confirm('האם למחוק את הקנייה? פעולה זו תמחק גם את החשבוניות')) return
+
+    // Optimistic removal
+    setPurchases(prev => prev.filter(p => p.id !== purchase.id))
+
+    // Delete receipt files from Storage
+    const receipts = purchase.purchase_receipts ?? []
+    if (receipts.length > 0) {
+      await Promise.allSettled(
+        receipts.map(r => supabase.storage.from('receipts').remove([r.storage_path])),
+      )
+    }
+
+    // Delete DB records (cascade handles purchase_items and purchase_receipts)
+    await supabase.from('purchase_receipts').delete().eq('purchase_id', purchase.id)
+    await supabase.from('purchase_items').delete().eq('purchase_id', purchase.id)
+    await supabase.from('purchases').delete().eq('id', purchase.id)
+  }
+
   function formatDate(iso: string | null) {
     if (!iso) return ''
     return new Date(iso).toLocaleDateString('he-IL', {
@@ -534,8 +554,18 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              {/* Date */}
-              <p className="text-xs text-gray-400 mb-3">{formatDate(purchase.purchased_at)}</p>
+              {/* Date + delete */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-gray-400">{formatDate(purchase.purchased_at)}</p>
+                <button
+                  onClick={() => deletePurchase(purchase)}
+                  className="p-1.5 rounded-lg text-gray-200 hover:text-red-500
+                             hover:bg-red-50 transition-colors"
+                  title="מחק קנייה"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
               {/* Receipt buttons */}
               {receipts.length > 0 ? (

@@ -668,7 +668,7 @@ export default function ShopPage() {
         />
       )}
 
-      <div className="pb-6 space-y-3">
+      <div className="pb-32 space-y-3">
 
         {/* ── Header: store badge + progress ── */}
         <div className={`rounded-2xl p-4 transition-all ${allDone ? 'bg-primary-600' : 'bg-primary-50 border border-primary-100'}`}>
