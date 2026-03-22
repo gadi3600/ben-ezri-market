@@ -71,11 +71,20 @@ export default function ListPage() {
   const [loading, setLoading]     = useState(true)
   const [adding, setAdding]       = useState(false)
   const [creatingList, setCreatingList] = useState(false)
+  const [allSuggestions, setAllSuggestions] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Derive filtered suggestions from what user typed (max 5, case-insensitive)
+  const suggestions = newName.trim().length > 0
+    ? allSuggestions
+        .filter(s => s.toLowerCase().includes(newName.toLowerCase()))
+        .slice(0, 5)
+    : []
 
   useEffect(() => {
     if (!profile?.family_id) return
     loadList()
+    loadSuggestions()
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime subscription
@@ -99,6 +108,14 @@ export default function ListPage() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [list?.id])
+
+  async function loadSuggestions() {
+    const { data } = await supabase.from('purchase_items').select('name')
+    if (data) {
+      const unique = [...new Set(data.map(r => r.name as string).filter(Boolean))]
+      setAllSuggestions(unique)
+    }
+  }
 
   async function loadList() {
     setLoading(true)
@@ -262,6 +279,29 @@ export default function ListPage() {
             ))}
           </div>
         </>
+      )}
+
+      {/* ── Autocomplete suggestions (above input bar) ── */}
+      {suggestions.length > 0 && (
+        <div className="fixed bottom-[136px] inset-x-0 px-4 z-50">
+          <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+            {suggestions.map(s => (
+              <button
+                key={s}
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => {
+                  setNewName(s)
+                  inputRef.current?.focus()
+                }}
+                className="w-full text-right px-4 py-3 text-sm text-gray-700 font-medium
+                           hover:bg-primary-50 active:bg-primary-100 transition-colors
+                           border-b border-gray-50 last:border-0"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ── Add-item bar (sticky above bottom nav) ── */}
