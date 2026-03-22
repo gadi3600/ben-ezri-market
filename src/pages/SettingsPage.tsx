@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import {
   User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown,
-  Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell,
+  Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell, Mail,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription } from '../lib/push'
+import { isAdmin, canEdit, roleLabel } from '../lib/permissions'
 import type { Family, UserProfile, Store } from '../lib/types'
+import type { Role } from '../lib/permissions'
 
 // ── Section wrapper — defined OUTSIDE component so React never remounts it ────
 function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
@@ -47,10 +49,19 @@ export default function SettingsPage() {
   const [pushEnabled, setPushEnabled]     = useState(false)
   const [pushLoading, setPushLoading]     = useState(false)
 
+  // Invites (admin only)
+  const [invites, setInvites]             = useState<{ id: string; email: string; role: Role }[]>([])
+  const [newInviteEmail, setNewInviteEmail] = useState('')
+  const [newInviteRole, setNewInviteRole]   = useState<Role>('member')
+  const [inviting, setInviting]           = useState(false)
+
   useEffect(() => {
     if (!profile) return
     setEditName(profile.full_name)
-    if (profile.family_id) loadFamilyData(profile.family_id)
+    if (profile.family_id) {
+      loadFamilyData(profile.family_id)
+      if (isAdmin(profile.role)) loadInvites(profile.family_id)
+    }
     loadStores()
     checkPushStatus()
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -108,6 +119,49 @@ export default function SettingsPage() {
     ])
     if (fam)  setFamily(fam)
     if (mems) setMembers(mems)
+  }
+
+  async function loadInvites(familyId: string) {
+    const { data } = await supabase
+      .from('invites')
+      .select('id, email, role')
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: false })
+    setInvites((data as { id: string; email: string; role: Role }[]) ?? [])
+  }
+
+  async function sendInvite() {
+    if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
+    setInviting(true)
+    const { error } = await supabase.from('invites').insert({
+      email:      newInviteEmail.trim().toLowerCase(),
+      role:       newInviteRole,
+      family_id:  profile.family_id,
+      invited_by: profile.id,
+    })
+    if (error) {
+      alert(error.message.includes('duplicate') ? 'הזמנה לאימייל זה כבר קיימת' : error.message)
+    } else {
+      setNewInviteEmail('')
+      await loadInvites(profile.family_id)
+    }
+    setInviting(false)
+  }
+
+  async function deleteInvite(id: string) {
+    await supabase.from('invites').delete().eq('id', id)
+    setInvites(prev => prev.filter(i => i.id !== id))
+  }
+
+  async function changeUserRole(userId: string, newRole: Role) {
+    await supabase.from('users').update({ role: newRole }).eq('id', userId)
+    setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
+  }
+
+  async function removeUser(userId: string, name: string) {
+    if (!confirm(`להסיר את ${name} מהמשפחה?`)) return
+    await supabase.from('users').update({ family_id: null, role: 'member' }).eq('id', userId)
+    setMembers(prev => prev.filter(m => m.id !== userId))
   }
 
   async function loadStores() {
@@ -206,7 +260,7 @@ export default function SettingsPage() {
         </div>
         {profile?.family_id && (
           <p className="text-xs text-gray-400 mt-2">
-            תפקיד: {profile.role === 'admin' ? '👑 מנהל' : 'חבר'}
+            תפקיד: {profile.role === 'admin' ? '👑 מנהל' : profile.role === 'viewer' ? '👁️ צופה' : '👤 חבר'}
           </p>
         )}
       </Section>
@@ -244,16 +298,100 @@ export default function SettingsPage() {
                                 text-sm font-extrabold text-primary-700 flex-shrink-0">
                   {m.full_name?.charAt(0)?.toUpperCase() ?? '?'}
                 </div>
-                <span className="flex-1 font-medium text-gray-700">{m.full_name}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-gray-700 block truncate">{m.full_name}</span>
+                  <span className="text-xs text-gray-400">{roleLabel(m.role)}</span>
+                </div>
                 {m.id === profile?.id && (
                   <span className="text-xs text-primary-500 font-medium">אני</span>
                 )}
-                {m.role === 'admin' && (
+                {isAdmin(profile!.role) && m.id !== profile?.id && (
+                  <>
+                    <select
+                      value={m.role}
+                      onChange={e => changeUserRole(m.id, e.target.value as Role)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white
+                                 focus:outline-none focus:ring-1 focus:ring-primary-300"
+                    >
+                      <option value="admin">מנהל</option>
+                      <option value="member">חבר</option>
+                      <option value="viewer">צופה</option>
+                    </select>
+                    <button
+                      onClick={() => removeUser(m.id, m.full_name)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
+                                 hover:bg-red-50 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+                {!isAdmin(profile!.role) && m.role === 'admin' && (
                   <Crown className="w-4 h-4 text-amber-400" />
                 )}
               </div>
             ))}
           </div>
+
+          {/* ── Invite user (admin only) ── */}
+          {isAdmin(profile!.role) && (
+            <div className="mt-5 pt-5 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <Mail className="w-4 h-4 text-primary-500" />
+                <p className="text-sm font-semibold text-gray-600">הזמן משתמש</p>
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="email"
+                  value={newInviteEmail}
+                  onChange={e => setNewInviteEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendInvite()}
+                  placeholder="אימייל..."
+                  className="input flex-1 text-sm"
+                  dir="ltr"
+                />
+                <select
+                  value={newInviteRole}
+                  onChange={e => setNewInviteRole(e.target.value as Role)}
+                  className="text-sm border-2 border-gray-200 rounded-xl px-3 py-2 bg-white
+                             focus:outline-none focus:ring-0 focus:border-primary-400"
+                >
+                  <option value="member">חבר</option>
+                  <option value="viewer">צופה</option>
+                  <option value="admin">מנהל</option>
+                </select>
+                <button
+                  onClick={sendInvite}
+                  disabled={!newInviteEmail.trim() || inviting}
+                  className="btn-primary px-3.5 flex-shrink-0 disabled:opacity-40"
+                >
+                  {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">
+                המוזמן יקבל אוטומטית את התפקיד שנבחר כשיירשם עם האימייל הזה
+              </p>
+
+              {/* Pending invites */}
+              {invites.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-500">הזמנות ממתינות</p>
+                  {invites.map(inv => (
+                    <div key={inv.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                      <span className="flex-1 text-xs text-gray-600 truncate" dir="ltr">{inv.email}</span>
+                      <span className="text-xs text-gray-400">{roleLabel(inv.role)}</span>
+                      <button
+                        onClick={() => deleteInvite(inv.id)}
+                        className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </Section>
       ) : (
         <div className="card text-center py-6">
@@ -262,7 +400,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ── Stores ── */}
+      {/* ── Stores (editors only) ── */}
+      {canEdit(profile!.role) && (
       <Section icon={<StoreIcon className="w-5 h-5 text-primary-600" />} title="חנויות">
         {/* Add store */}
         <div className="flex gap-2 mb-1">
@@ -349,8 +488,10 @@ export default function SettingsPage() {
           </div>
         )}
       </Section>
+      )}
 
-      {/* ── Notifications ── */}
+      {/* ── Notifications (editors only) ── */}
+      {canEdit(profile!.role) && (
       <Section icon={<Bell className="w-5 h-5 text-primary-600" />} title="התראות">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
@@ -377,6 +518,7 @@ export default function SettingsPage() {
           </p>
         )}
       </Section>
+      )}
 
       {/* ── Sign out ── */}
       <button

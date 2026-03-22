@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { isAdmin } from '../lib/permissions'
 import ReceiptModal from '../components/ReceiptModal'
 import PurchaseAnalysis from '../components/PurchaseAnalysis'
 
@@ -554,17 +555,19 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              {/* Date + delete */}
+              {/* Date + delete (admin only) */}
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs text-gray-400">{formatDate(purchase.purchased_at)}</p>
-                <button
-                  onClick={() => deletePurchase(purchase)}
-                  className="p-1.5 rounded-lg text-gray-200 hover:text-red-500
-                             hover:bg-red-50 transition-colors"
-                  title="מחק קנייה"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {isAdmin(profile!.role) && (
+                  <button
+                    onClick={() => deletePurchase(purchase)}
+                    className="p-1.5 rounded-lg text-gray-200 hover:text-red-500
+                               hover:bg-red-50 transition-colors"
+                    title="מחק קנייה"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Receipt buttons */}

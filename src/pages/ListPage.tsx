@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription, sendPushToFamily } from '../lib/push'
+import { canEdit } from '../lib/permissions'
 import type { ShoppingList, ListItem } from '../lib/types'
 
 // Extended item with joined user info
@@ -203,6 +204,7 @@ function EditItemModal({
 function ItemRow({
   item,
   currentUserId,
+  readOnly,
   onQtyChange,
   onDelete,
   onEdit,
@@ -210,6 +212,7 @@ function ItemRow({
 }: {
   item: ListItemWithUser
   currentUserId: string
+  readOnly?: boolean
   onQtyChange: (id: string, qty: number) => void
   onDelete: (id: string) => void
   onEdit: (item: ListItemWithUser) => void
@@ -234,7 +237,7 @@ function ItemRow({
         )}
 
         {/* Name + added by — tappable to open edit modal */}
-        <button onClick={() => onEdit(item)} className="flex-1 min-w-0 text-right">
+        <button onClick={() => !readOnly && onEdit(item)} className="flex-1 min-w-0 text-right">
           <span className="text-base font-medium leading-tight block truncate text-gray-800">
             {item.name}
           </span>
@@ -243,34 +246,40 @@ function ItemRow({
           )}
         </button>
 
-        {/* Inline qty +/- */}
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-          <button
-            onClick={() => onQtyChange(item.id, Math.max(1, item.quantity - 1))}
-            className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
-                       text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
-          >
-            <Minus className="w-3 h-3" />
-          </button>
-          <span className="w-7 text-center text-sm font-bold text-gray-700 select-none">
-            {item.quantity}
-          </span>
-          <button
-            onClick={() => onQtyChange(item.id, item.quantity + 1)}
-            className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
-                       text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
+        {/* Inline qty +/- (hidden for viewer) */}
+        {readOnly ? (
+          <span className="text-sm font-bold text-gray-400 flex-shrink-0">×{item.quantity}</span>
+        ) : (
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={() => onQtyChange(item.id, Math.max(1, item.quantity - 1))}
+              className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
+                         text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="w-7 text-center text-sm font-bold text-gray-700 select-none">
+              {item.quantity}
+            </span>
+            <button
+              onClick={() => onQtyChange(item.id, item.quantity + 1)}
+              className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center
+                         text-gray-400 hover:text-primary-600 active:bg-gray-200 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        )}
 
-        {/* Delete */}
-        <button
-          onClick={() => onDelete(item.id)}
-          className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {/* Delete (hidden for viewer) */}
+        {!readOnly && (
+          <button
+            onClick={() => onDelete(item.id)}
+            className="p-1.5 text-gray-200 hover:text-red-400 active:text-red-500 transition-colors flex-shrink-0"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Note line below */}
@@ -614,6 +623,7 @@ export default function ListPage() {
             <ItemRow
               key={item.id} item={item}
               currentUserId={profile!.id}
+              readOnly={!canEdit(profile!.role)}
               onQtyChange={updateQty} onDelete={deleteItem}
               onEdit={setEditingItem} onLightbox={setLightboxSrc}
             />
@@ -622,7 +632,7 @@ export default function ListPage() {
       )}
 
       {/* ── Autocomplete suggestions (above input bar) ── */}
-      {suggestions.length > 0 && (
+      {canEdit(profile!.role) && suggestions.length > 0 && (
         <div className="fixed bottom-[136px] inset-x-0 px-4 z-50">
           <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {suggestions.map(s => (
@@ -644,7 +654,9 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* ── Hidden file inputs: camera + gallery ── */}
+      {/* ── Hidden file inputs + add bar (editors only) ── */}
+      {canEdit(profile!.role) && (<>
+      {/* Hidden file inputs */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -792,6 +804,7 @@ export default function ListPage() {
           </div>
         </div>
       </div>
+      </>)}
     </div>
   )
 }

@@ -10,7 +10,7 @@ export interface UserProfile {
   family_id: string | null
   full_name: string
   avatar_url: string | null
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'viewer'
   created_at: string
   updated_at: string
 }

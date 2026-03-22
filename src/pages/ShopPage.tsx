@@ -7,6 +7,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
+import { canEdit } from '../lib/permissions'
 import ReceiptModal from '../components/ReceiptModal'
 import ImageLightbox from '../components/ImageLightbox'
 
@@ -245,11 +246,13 @@ function ItemDetailModal({
 
 function ActiveItem({
   item,
+  readOnly,
   onCheck,
   onDefer,
   onTap,
 }: {
   item: ListItemWithUser
+  readOnly?: boolean
   onCheck: (item: ListItemWithUser) => void
   onDefer: (item: ListItemWithUser) => void
   onTap: (item: ListItemWithUser) => void
@@ -285,27 +288,29 @@ function ActiveItem({
         </div>
       </button>
 
-      {/* ✓ לעגלה */}
-      <button
-        onClick={() => onCheck(item)}
-        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl
-                   bg-primary-500 hover:bg-primary-600 active:bg-primary-700
-                   transition-colors text-white text-xs font-bold flex-shrink-0 min-h-[40px]"
-      >
-        <CheckCircle2 className="w-4 h-4" />
-        <span>לעגלה</span>
-      </button>
-
-      {/* → להמשך */}
-      <button
-        onClick={() => onDefer(item)}
-        className="flex items-center gap-1 px-3 py-2.5 rounded-xl
-                   bg-gray-100 hover:bg-gray-200 active:bg-gray-300
-                   transition-colors text-gray-500 text-xs font-semibold flex-shrink-0 min-h-[40px]"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>להמשך</span>
-      </button>
+      {/* ✓ לעגלה + → להמשך (hidden for viewer) */}
+      {!readOnly && (
+        <>
+          <button
+            onClick={() => onCheck(item)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl
+                       bg-primary-500 hover:bg-primary-600 active:bg-primary-700
+                       transition-colors text-white text-xs font-bold flex-shrink-0 min-h-[40px]"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>לעגלה</span>
+          </button>
+          <button
+            onClick={() => onDefer(item)}
+            className="flex items-center gap-1 px-3 py-2.5 rounded-xl
+                       bg-gray-100 hover:bg-gray-200 active:bg-gray-300
+                       transition-colors text-gray-500 text-xs font-semibold flex-shrink-0 min-h-[40px]"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>להמשך</span>
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -728,6 +733,7 @@ export default function ShopPage() {
             {active.map(item => (
               <ActiveItem
                 key={item.id} item={item}
+                readOnly={!canEdit(profile!.role)}
                 onCheck={checkItem} onDefer={deferItem}
                 onTap={setDetailItem}
               />
@@ -780,7 +786,7 @@ export default function ShopPage() {
         )}
 
         {/* ── Complete button ── */}
-        {allDone && (
+        {allDone && canEdit(profile!.role) && (
           <button
             onClick={completeShop}
             disabled={completing || !!completedPurchaseId}
