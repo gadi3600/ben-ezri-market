@@ -115,6 +115,8 @@ export default function ReceiptModal({
         existingNames.add(`${hash}.${ext}`) // block within-batch duplicates
       }
 
+      console.log(`📤 Upload complete: ${paths.length} uploaded, ${skipped} skipped, ${files.length} total files`)
+
       setSkippedCount(skipped)
       setSavedCount(paths.length)
 
@@ -136,6 +138,7 @@ export default function ReceiptModal({
         .createSignedUrls(paths, 300)
 
       const imageUrls = (signed ?? []).map(s => s.signedUrl).filter(Boolean)
+      console.log(`🔍 Sending ${imageUrls.length} image URLs to analyze-receipt`)
 
       if (imageUrls.length > 0) {
         const fnRes = await fetch(
