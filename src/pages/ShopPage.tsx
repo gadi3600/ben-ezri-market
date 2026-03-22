@@ -18,22 +18,6 @@ interface ListItemWithUser extends ListItem {
   added_by_user: { id: string; full_name: string } | null
 }
 
-// Consistent color per user based on their id
-const USER_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-orange-100 text-orange-700',
-  'bg-purple-100 text-purple-700',
-  'bg-pink-100 text-pink-700',
-  'bg-teal-100 text-teal-700',
-  'bg-amber-100 text-amber-700',
-  'bg-indigo-100 text-indigo-700',
-  'bg-rose-100 text-rose-700',
-]
-function userColor(id: string) {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
-  return USER_COLORS[Math.abs(hash) % USER_COLORS.length]
-}
 
 // ── Store visual config ───────────────────────────────────────────────────────
 
@@ -246,8 +230,15 @@ function ItemDetailModal({
 
 // ── ActiveItem ────────────────────────────────────────────────────────────────
 
+// All categories for the picker
+const ALL_CATEGORIES = CATEGORY_ORDER.map(id => {
+  const allCats: Record<string, Category> = { ...CAT, other: OTHER }
+  return allCats[id]
+}).filter(Boolean) as Category[]
+
 function ActiveItem({
   item,
+  itemCategory,
   readOnly,
   index,
   total,
@@ -257,8 +248,10 @@ function ActiveItem({
   onMoveUp,
   onMoveDown,
   onMoveTo,
+  onChangeCategory,
 }: {
   item: ListItemWithUser
+  itemCategory: Category
   readOnly?: boolean
   index: number
   total: number
@@ -268,13 +261,12 @@ function ActiveItem({
   onMoveUp: () => void
   onMoveDown: () => void
   onMoveTo: (targetIdx: number) => void
+  onChangeCategory: (catId: string) => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
-  const user = item.added_by_user
-  const initial = user?.full_name?.charAt(0) ?? ''
-  const color = item.added_by ? userColor(item.added_by) : 'bg-gray-100 text-gray-400'
   const [editingPos, setEditingPos] = useState(false)
   const [posValue, setPosValue] = useState('')
+  const [showCatPicker, setShowCatPicker] = useState(false)
 
   function handlePosSubmit() {
     const target = parseInt(posValue, 10) - 1
@@ -329,13 +321,36 @@ function ActiveItem({
         </button>
       </div>
 
-      {/* User initial circle */}
-      {initial && (
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center
-                         text-xs font-extrabold flex-shrink-0 ${color}`}>
-          {initial}
-        </div>
-      )}
+      {/* Category picker */}
+      <div className="relative flex-shrink-0">
+        <button
+          onClick={() => setShowCatPicker(v => !v)}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm
+                     hover:bg-gray-100 active:bg-gray-200 transition-colors"
+          title={itemCategory.label}
+        >
+          {itemCategory.emoji}
+        </button>
+        {showCatPicker && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
+            <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
+                            overflow-hidden w-44 max-h-64 overflow-y-auto">
+              {ALL_CATEGORIES.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
+                             ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
+                >
+                  <span className="text-base">{cat.emoji}</span>
+                  <span>{cat.label}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Name + qty — tappable area */}
       <button onClick={() => onTap(item)} className="flex-1 min-w-0 text-right relative">
@@ -783,6 +798,14 @@ export default function ShopPage() {
     setCustomOrder(ids)
   }
 
+  function changeItemCategory(itemId: string, newCatId: string) {
+    setCatOverrides(prev => ({ ...prev, [itemId]: newCatId }))
+    // If no custom order yet, initialize from current display order
+    if (customOrder.length === 0) {
+      setCustomOrder(displayOrder.map(i => i.id))
+    }
+  }
+
   function resetOrder() {
     setCustomOrder([])
     setCatOverrides({})
@@ -958,6 +981,7 @@ export default function ShopPage() {
                     return (
                       <ActiveItem
                         key={item.id} item={item}
+                        itemCategory={getItemCategory(item)}
                         readOnly={!canEdit(profile!.role)}
                         index={dispIdx}
                         total={displayOrder.length}
@@ -966,6 +990,7 @@ export default function ShopPage() {
                         onMoveUp={() => moveItem(item.id, 'up')}
                         onMoveDown={() => moveItem(item.id, 'down')}
                         onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
+                        onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
                       />
                     )
                   })}
