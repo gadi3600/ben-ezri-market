@@ -524,6 +524,13 @@ export default function ShopPage() {
             unit:        item.unit,
           })),
         )
+
+        // Mark checked list_items with store and purchase time
+        const checkedIds = checkedItems.map(i => i.id)
+        await supabase.from('list_items').update({
+          purchased_store_id: selectedStore?.id ?? null,
+          purchased_at:       new Date().toISOString(),
+        }).in('id', checkedIds)
       }
     }
 

@@ -40,6 +40,9 @@ interface DetailItem {
   quantity: number
   unit: string
   note: string | null
+  purchased_store_id: string | null
+  purchased_at: string | null
+  purchased_store: { name: string } | null
 }
 
 
@@ -76,8 +79,6 @@ function ListDetailModal({
   const [selected, setSelected]   = useState<Set<string>>(new Set())
   const [loading, setLoading]     = useState(true)
   const [importing, setImporting] = useState(false)
-  // Map item name (lowercase) → purchase info
-  const [purchaseInfo, setPurchaseInfo] = useState<Record<string, { store: string; date: string }>>({})
 
   useEffect(() => {
     loadItems()
@@ -87,49 +88,17 @@ function ListDetailModal({
     setLoading(true)
     const { data } = await supabase
       .from('list_items')
-      .select('id, name, quantity, unit, note')
+      .select('id, name, quantity, unit, note, purchased_store_id, purchased_at, purchased_store:stores!purchased_store_id(name)')
       .eq('list_id', list.id)
       .order('sort_order', { ascending: true })
-    const rows = (data as DetailItem[]) ?? []
+
+    const rows: DetailItem[] = ((data ?? []) as unknown as Array<Omit<DetailItem, 'purchased_store'> & { purchased_store: { name: string }[] | { name: string } | null }>).map(r => ({
+      ...r,
+      purchased_store: Array.isArray(r.purchased_store) ? r.purchased_store[0] ?? null : r.purchased_store,
+    }))
+
     setItems(rows)
     setSelected(new Set(rows.map(i => i.id)))
-
-    // Load purchase history for these item names — one query per unique name
-    if (rows.length > 0) {
-      const uniqueNames = [...new Set(rows.map(r => r.name))]
-      const info: Record<string, { store: string; date: string }> = {}
-
-      await Promise.all(uniqueNames.map(async (name) => {
-        const { data: piRows } = await supabase
-          .from('purchase_items')
-          .select('purchase_id')
-          .eq('name', name)
-          .limit(1)
-
-        if (!piRows?.length) return
-
-        const { data: purchase } = await supabase
-          .from('purchases')
-          .select('purchased_at, store_id, stores(name)')
-          .eq('id', piRows[0].purchase_id)
-          .single()
-
-        if (!purchase) return
-        const stores = purchase.stores as unknown
-        const storeName = Array.isArray(stores) ? (stores[0] as { name: string })?.name : (stores as { name: string } | null)?.name
-        if (!storeName) return
-
-        info[name.trim().toLowerCase()] = {
-          store: storeName,
-          date: new Date(purchase.purchased_at).toLocaleDateString('he-IL', {
-            day: 'numeric', month: 'short',
-          }),
-        }
-      }))
-
-      setPurchaseInfo(info)
-    }
-
     setLoading(false)
   }
 
@@ -205,7 +174,10 @@ function ListDetailModal({
 
             {items.map(item => {
               const isSel = selected.has(item.id)
-              const pInfo = purchaseInfo[item.name.trim().toLowerCase()]
+              const storeName = item.purchased_store?.name
+              const purchasedDate = item.purchased_at
+                ? new Date(item.purchased_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+                : null
               return (
                 <button
                   key={item.id}
@@ -226,9 +198,9 @@ function ListDetailModal({
                   {/* Name + purchase info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
-                    {pInfo && (
+                    {storeName && (
                       <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                        🏪 נרכש ב{pInfo.store} · {pInfo.date}
+                        🏪 נרכש ב{storeName}{purchasedDate && ` · ${purchasedDate}`}
                       </p>
                     )}
                     {item.note && (

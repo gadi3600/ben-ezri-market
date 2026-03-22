@@ -52,6 +52,8 @@ export interface ListItem {
   checked_by: string | null
   checked_at: string | null
   image_url: string | null
+  purchased_store_id: string | null
+  purchased_at: string | null
   created_at: string
   updated_at: string
 }
