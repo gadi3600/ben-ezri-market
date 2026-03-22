@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Clock, Receipt, Plus, ChevronLeft, ChevronRight,
-  X, Trash2, CheckCircle2, Pencil, BarChart3,
+  X, Trash2, CheckCircle2, Pencil, BarChart3, ChevronDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -32,6 +32,8 @@ interface PurchaseRow {
   stores: { name: string } | null
   purchase_receipts: ReceiptRow[]
 }
+
+interface StoreOption { id: string; name: string }
 
 // ── Store visuals ─────────────────────────────────────────────────────────────
 
@@ -254,12 +256,17 @@ export default function HistoryPage() {
   const [analysisFor, setAnalysisFor]           = useState<PurchaseRow | null>(null)
 
   // Amount editing
-  const [editingAmount, setEditingAmount] = useState<string | null>(null) // purchaseId
+  const [editingAmount, setEditingAmount] = useState<string | null>(null)
   const [editAmount, setEditAmount]       = useState('')
+
+  // Store editing
+  const [editingStore, setEditingStore] = useState<string | null>(null)
+  const [stores, setStores]             = useState<StoreOption[]>([])
 
   useEffect(() => {
     if (!profile?.family_id) return
     loadHistory()
+    loadStores()
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadHistory() {
@@ -313,6 +320,23 @@ export default function HistoryPage() {
     } else {
       setLightboxReceipts(remaining)
     }
+  }
+
+  async function loadStores() {
+    const { data } = await supabase
+      .from('stores')
+      .select('id, name')
+      .eq('family_id', profile!.family_id)
+      .order('name')
+    if (data) setStores(data as StoreOption[])
+  }
+
+  async function updateStore(purchaseId: string, storeId: string, storeName: string) {
+    setEditingStore(null)
+    setPurchases(prev => prev.map(p =>
+      p.id === purchaseId ? { ...p, store_id: storeId, stores: { name: storeName } } : p,
+    ))
+    await supabase.from('purchases').update({ store_id: storeId }).eq('id', purchaseId)
   }
 
   async function saveAmount(purchaseId: string) {
@@ -382,6 +406,10 @@ export default function HistoryPage() {
         />
       )}
 
+      {editingStore && (
+        <div className="fixed inset-0 z-10" onClick={() => setEditingStore(null)} />
+      )}
+
       <div className="space-y-3 pb-32">
         <div className="card-green flex items-center gap-3">
           <Clock className="w-5 h-5 text-primary-600 flex-shrink-0" />
@@ -402,11 +430,34 @@ export default function HistoryPage() {
             <div key={purchase.id} className="card">
               {/* Store + amount row */}
               <div className="flex items-center justify-between mb-2">
-                <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg}`}>
-                  <span className="text-base">{v.emoji}</span>
-                  <span className={`text-sm font-bold ${v.text}`}>
-                    {purchase.stores?.name ?? 'ללא חנות'}
-                  </span>
+                <div className="relative">
+                  <button
+                    onClick={() => setEditingStore(editingStore === purchase.id ? null : purchase.id)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl ${v.bg} active:opacity-70 transition-opacity`}
+                  >
+                    <span className="text-base">{v.emoji}</span>
+                    <span className={`text-sm font-bold ${v.text}`}>
+                      {purchase.stores?.name ?? 'ללא חנות'}
+                    </span>
+                    <ChevronDown className={`w-3 h-3 ${v.text} opacity-60 transition-transform ${editingStore === purchase.id ? 'rotate-180' : ''}`} />
+                  </button>
+                  {editingStore === purchase.id && (
+                    <div className="absolute top-full right-0 mt-1 z-20 bg-white rounded-2xl shadow-xl border border-gray-100 min-w-[160px] overflow-hidden">
+                      {stores.length === 0 ? (
+                        <p className="text-center text-gray-400 text-xs py-4 px-3">אין חנויות מוגדרות</p>
+                      ) : stores.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => updateStore(purchase.id, s.id, s.name)}
+                          className={`w-full text-right px-4 py-3 text-sm font-medium hover:bg-primary-50 transition-colors ${
+                            purchase.store_id === s.id ? 'text-primary-700 font-bold bg-primary-50' : 'text-gray-700'
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Amount + edit */}

@@ -18,6 +18,7 @@ export interface UserProfile {
 export interface Store {
   id: string
   name: string
+  family_id: string | null
   logo_url: string | null
   website: string | null
   is_active: boolean

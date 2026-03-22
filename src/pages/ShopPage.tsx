@@ -56,7 +56,7 @@ function StorePickerModal({
       if (error) throw error
       if (data) await handleSelect(data)
     } catch {
-      await onSelect({ id: '', name: newName.trim(), logo_url: null, website: null, is_active: true, created_at: '' })
+      await onSelect({ id: '', name: newName.trim(), family_id: null, logo_url: null, website: null, is_active: true, created_at: '' })
     } finally {
       setSaving(false)
     }

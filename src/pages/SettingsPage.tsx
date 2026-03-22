@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown } from 'lucide-react'
+import { User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown, Plus, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Family, UserProfile, Store } from '../lib/types'
@@ -13,6 +13,8 @@ export default function SettingsPage() {
   const [editName, setEditName]     = useState('')
   const [savingName, setSavingName] = useState(false)
   const [nameSaved, setNameSaved]   = useState(false)
+  const [newStoreName, setNewStoreName] = useState('')
+  const [addingStore, setAddingStore]   = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -31,9 +33,31 @@ export default function SettingsPage() {
   }
 
   async function loadStores() {
+    if (!profile?.family_id) return
     const { data } = await supabase
-      .from('stores').select('*').eq('is_active', true).order('name')
+      .from('stores').select('*').eq('family_id', profile.family_id).order('name')
     if (data) setStores(data)
+  }
+
+  async function addStore() {
+    if (!newStoreName.trim() || !profile?.family_id || addingStore) return
+    setAddingStore(true)
+    const { data, error } = await supabase
+      .from('stores')
+      .insert({ name: newStoreName.trim(), family_id: profile.family_id, is_active: true })
+      .select()
+      .single()
+    if (!error && data) {
+      setStores(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+      setNewStoreName('')
+    }
+    setAddingStore(false)
+  }
+
+  async function deleteStore(id: string) {
+    if (!confirm('למחוק חנות זו?')) return
+    await supabase.from('stores').delete().eq('id', id)
+    setStores(prev => prev.filter(s => s.id !== id))
   }
 
   async function saveName() {
@@ -147,24 +171,47 @@ export default function SettingsPage() {
 
       {/* ── Stores ── */}
       <Section icon={<StoreIcon className="w-5 h-5 text-primary-600" />} title="חנויות">
-        <div className="divide-y divide-gray-50">
-          {stores.map(s => (
-            <div key={s.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-primary-400 flex-shrink-0" />
-              <span className="flex-1 font-medium text-gray-700">{s.name}</span>
-              {s.website && (
-                <a
-                  href={s.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary-500 hover:text-primary-700 hover:underline"
-                >
-                  אתר
-                </a>
-              )}
-            </div>
-          ))}
+        {/* Add store */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newStoreName}
+            onChange={e => setNewStoreName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addStore()}
+            placeholder="שם חנות חדשה..."
+            className="input flex-1 text-sm"
+          />
+          <button
+            onClick={addStore}
+            disabled={!newStoreName.trim() || addingStore}
+            className="btn-primary px-3.5 flex-shrink-0 disabled:opacity-40"
+          >
+            {addingStore
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Plus className="w-4 h-4" />
+            }
+          </button>
         </div>
+
+        {/* Store list */}
+        {stores.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-2">אין חנויות מוגדרות עדיין</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {stores.map(s => (
+              <div key={s.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary-400 flex-shrink-0" />
+                <span className="flex-1 font-medium text-gray-700">{s.name}</span>
+                <button
+                  onClick={() => deleteStore(s.id)}
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ── Sign out ── */}
