@@ -42,16 +42,6 @@ interface DetailItem {
   note: string | null
 }
 
-interface PurchaseItemInfo {
-  name: string
-  purchases: {
-    purchased_at: string
-    stores: { name: string }[] | { name: string } | null
-  }[] | {
-    purchased_at: string
-    stores: { name: string }[] | { name: string } | null
-  } | null
-}
 
 // ── Color helper ──────────────────────────────────────────────────────────────
 
@@ -104,30 +94,39 @@ function ListDetailModal({
     setItems(rows)
     setSelected(new Set(rows.map(i => i.id)))
 
-    // Load purchase history for these item names
+    // Load purchase history for these item names — one query per unique name
     if (rows.length > 0) {
-      const names = [...new Set(rows.map(r => r.name))]
-      const { data: piData } = await supabase
-        .from('purchase_items')
-        .select('name, purchases(purchased_at, stores(name))')
-        .in('name', names)
-        .order('created_at', { ascending: false })
-
+      const uniqueNames = [...new Set(rows.map(r => r.name))]
       const info: Record<string, { store: string; date: string }> = {}
-      for (const row of (piData ?? []) as unknown as PurchaseItemInfo[]) {
-        const key = row.name.trim().toLowerCase()
-        if (info[key]) continue // keep most recent
-        const purchase = Array.isArray(row.purchases) ? row.purchases[0] : row.purchases
-        if (!purchase) continue
-        const store = Array.isArray(purchase.stores) ? purchase.stores[0] : purchase.stores
-        if (!store?.name) continue
-        info[key] = {
-          store: store.name,
+
+      await Promise.all(uniqueNames.map(async (name) => {
+        const { data: piRows } = await supabase
+          .from('purchase_items')
+          .select('purchase_id')
+          .eq('name', name)
+          .limit(1)
+
+        if (!piRows?.length) return
+
+        const { data: purchase } = await supabase
+          .from('purchases')
+          .select('purchased_at, store_id, stores(name)')
+          .eq('id', piRows[0].purchase_id)
+          .single()
+
+        if (!purchase) return
+        const stores = purchase.stores as unknown
+        const storeName = Array.isArray(stores) ? (stores[0] as { name: string })?.name : (stores as { name: string } | null)?.name
+        if (!storeName) return
+
+        info[name.trim().toLowerCase()] = {
+          store: storeName,
           date: new Date(purchase.purchased_at).toLocaleDateString('he-IL', {
             day: 'numeric', month: 'short',
           }),
         }
-      }
+      }))
+
       setPurchaseInfo(info)
     }
 
