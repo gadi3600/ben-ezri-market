@@ -283,6 +283,7 @@ export default function ListHistoryPage() {
       .select('id, name, status, created_at, created_by, creator:users!created_by(id, full_name), list_items(count)')
       .eq('family_id', profile!.family_id)
       .order('created_at', { ascending: false })
+      .limit(50)
 
     const rawRows = (listData as unknown as ListRowRaw[]) ?? []
     const rows: ListRow[] = rawRows.map(r => ({

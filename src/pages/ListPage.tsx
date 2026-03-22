@@ -379,7 +379,17 @@ export default function ListPage() {
   }, [list?.id])
 
   async function loadSuggestions() {
-    const { data } = await supabase.from('list_items').select('name')
+    if (!profile?.family_id) return
+    // Only load names from this family's lists
+    const { data: listIds } = await supabase
+      .from('shopping_lists')
+      .select('id')
+      .eq('family_id', profile.family_id)
+    if (!listIds?.length) return
+    const { data } = await supabase
+      .from('list_items')
+      .select('name')
+      .in('list_id', listIds.map(l => l.id))
     if (data) {
       const unique = [...new Set(data.map(r => r.name as string).filter(Boolean))]
       setAllSuggestions(unique)

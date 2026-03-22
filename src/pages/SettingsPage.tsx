@@ -65,7 +65,7 @@ export default function SettingsPage() {
     }
     loadStores()
     checkPushStatus()
-  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.family_id, profile?.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkPushStatus() {
     if (!profile) return
