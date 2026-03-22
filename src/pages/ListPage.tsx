@@ -160,18 +160,26 @@ export default function ListPage() {
     if (!newName.trim() || !list || adding) return
     setAdding(true)
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.sort_order)) : 0
-    await supabase.from('list_items').insert({
+    const trimmedName = newName.trim()
+    const qty = parseFloat(newQty) || 1
+    const { data } = await supabase.from('list_items').insert({
       list_id:   list.id,
-      name:      newName.trim(),
-      quantity:  parseFloat(newQty) || 1,
+      name:      trimmedName,
+      quantity:  qty,
       unit:      'יחידה',
       added_by:  profile!.id,
       sort_order: maxOrder + 1,
-    })
+    }).select().single()
+    if (data) {
+      setItems(prev => {
+        if (prev.some(i => i.id === data.id)) return prev
+        return [...prev, data]
+      })
+    }
     setNewName('')
     setNewQty('1')
     setAdding(false)
-    inputRef.current?.focus()
+    setTimeout(() => inputRef.current?.focus(), 50)
   }
 
   async function toggleItem(item: ListItem) {
