@@ -54,6 +54,7 @@ export default function SettingsPage() {
   const [newInviteEmail, setNewInviteEmail] = useState('')
   const [newInviteRole, setNewInviteRole]   = useState<Role>('member')
   const [inviting, setInviting]           = useState(false)
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -130,22 +131,37 @@ export default function SettingsPage() {
     setInvites((data as { id: string; email: string; role: Role }[]) ?? [])
   }
 
+  function inviteLink(inviteId: string, role: Role) {
+    const base = window.location.origin
+    return `${base}/join?token=${inviteId}&role=${role}`
+  }
+
   async function sendInvite() {
     if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
     setInviting(true)
-    const { error } = await supabase.from('invites').insert({
+    const { data, error } = await supabase.from('invites').insert({
       email:      newInviteEmail.trim().toLowerCase(),
       role:       newInviteRole,
       family_id:  profile.family_id,
       invited_by: profile.id,
-    })
+    }).select('id').single()
     if (error) {
       alert(error.message.includes('duplicate') ? 'הזמנה לאימייל זה כבר קיימת' : error.message)
-    } else {
+    } else if (data) {
+      const link = inviteLink(data.id, newInviteRole)
+      await navigator.clipboard.writeText(link).catch(() => {})
+      alert('הלינק הועתק! שלח אותו למוזמן ב-WhatsApp, SMS וכו\'')
       setNewInviteEmail('')
       await loadInvites(profile.family_id)
     }
     setInviting(false)
+  }
+
+  async function copyInviteLink(inv: { id: string; role: Role }) {
+    const link = inviteLink(inv.id, inv.role)
+    await navigator.clipboard.writeText(link).catch(() => {})
+    setCopiedInviteId(inv.id)
+    setTimeout(() => setCopiedInviteId(null), 2000)
   }
 
   async function deleteInvite(id: string) {
@@ -369,7 +385,7 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mb-3">
-                המוזמן יקבל אוטומטית את התפקיד שנבחר כשיירשם עם האימייל הזה
+                הלינק יועתק אוטומטית — שלח ב-WhatsApp, SMS וכו'
               </p>
 
               {/* Pending invites */}
@@ -380,6 +396,16 @@ export default function SettingsPage() {
                     <div key={inv.id} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
                       <span className="flex-1 text-xs text-gray-600 truncate" dir="ltr">{inv.email}</span>
                       <span className="text-xs text-gray-400">{roleLabel(inv.role)}</span>
+                      <button
+                        onClick={() => copyInviteLink(inv)}
+                        className="p-1 text-gray-400 hover:text-primary-500 transition-colors"
+                        title="העתק לינק"
+                      >
+                        {copiedInviteId === inv.id
+                          ? <Check className="w-3.5 h-3.5 text-primary-500" />
+                          : <Copy className="w-3.5 h-3.5" />
+                        }
+                      </button>
                       <button
                         onClick={() => deleteInvite(inv.id)}
                         className="p-1 text-gray-300 hover:text-red-500 transition-colors"

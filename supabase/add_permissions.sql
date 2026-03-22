@@ -27,6 +27,11 @@ CREATE POLICY "invites: family admin can manage"
   USING (public.is_family_admin(family_id))
   WITH CHECK (public.is_family_admin(family_id));
 
+-- Allow anyone to read invites (for join page — reads by id)
+CREATE POLICY "invites: public read"
+  ON public.invites FOR SELECT
+  USING (true);
+
 -- ============================================================
 -- 3. Helper: is_family_editor (admin or member, not viewer)
 -- ============================================================

@@ -8,6 +8,7 @@ import ShopPage        from './pages/ShopPage'
 import HistoryPage     from './pages/HistoryPage'
 import SettingsPage    from './pages/SettingsPage'
 import ListHistoryPage from './pages/ListHistoryPage'
+import JoinPage        from './pages/JoinPage'
 
 // ── Nav items ───────────────────────────────────────────────────────────────
 
@@ -32,6 +33,9 @@ function AppContent() {
       <div className="w-8 h-8 border-4 border-white/40 border-t-white rounded-full animate-spin" />
     </div>
   )
+
+  // Join page — accessible without login
+  if (!session && window.location.pathname === '/join') return <JoinPage />
 
   // Not logged in
   if (!session) return <AuthPage />
