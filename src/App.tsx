@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { ShoppingCart, Store, History, Settings } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AuthPage        from './pages/AuthPage'
@@ -23,6 +23,10 @@ const navItems = [
 
 function AppContent() {
   const { session, profile, loading } = useAuth()
+  const location = useLocation()
+
+  // Join page — accessible without login
+  if (location.pathname === '/join') return <JoinPage />
 
   // Loading splash
   if (loading) return (
@@ -33,9 +37,6 @@ function AppContent() {
       <div className="w-8 h-8 border-4 border-white/40 border-t-white rounded-full animate-spin" />
     </div>
   )
-
-  // Join page — accessible without login
-  if (!session && window.location.pathname === '/join') return <JoinPage />
 
   // Not logged in
   if (!session) return <AuthPage />
