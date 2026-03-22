@@ -1,8 +1,24 @@
 import { useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown, Plus, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Family, UserProfile, Store } from '../lib/types'
+
+// ── Section wrapper — defined OUTSIDE component so React never remounts it ────
+function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="bg-primary-100 rounded-xl p-2">{icon}</div>
+        <h3 className="font-bold text-gray-800 text-base">{title}</h3>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
   const { profile, refreshProfile, signOut } = useAuth()
@@ -15,6 +31,7 @@ export default function SettingsPage() {
   const [nameSaved, setNameSaved]   = useState(false)
   const [newStoreName, setNewStoreName] = useState('')
   const [addingStore, setAddingStore]   = useState(false)
+  const [storeError, setStoreError]     = useState<string | null>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -34,20 +51,28 @@ export default function SettingsPage() {
 
   async function loadStores() {
     if (!profile?.family_id) return
+    // Load family-specific stores AND global stores (family_id IS NULL)
     const { data } = await supabase
-      .from('stores').select('*').eq('family_id', profile.family_id).order('name')
+      .from('stores')
+      .select('*')
+      .or(`family_id.eq.${profile.family_id},family_id.is.null`)
+      .eq('is_active', true)
+      .order('name')
     if (data) setStores(data)
   }
 
   async function addStore() {
     if (!newStoreName.trim() || !profile?.family_id || addingStore) return
     setAddingStore(true)
+    setStoreError(null)
     const { data, error } = await supabase
       .from('stores')
       .insert({ name: newStoreName.trim(), family_id: profile.family_id, is_active: true })
       .select()
       .single()
-    if (!error && data) {
+    if (error) {
+      setStoreError(error.message)
+    } else if (data) {
       setStores(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
       setNewStoreName('')
     }
@@ -55,9 +80,12 @@ export default function SettingsPage() {
   }
 
   async function deleteStore(id: string) {
-    if (!confirm('למחוק חנות זו?')) return
-    await supabase.from('stores').delete().eq('id', id)
-    setStores(prev => prev.filter(s => s.id !== id))
+    const store = stores.find(s => s.id === id)
+    // Only delete family-owned stores; global stores (family_id=null) are read-only
+    if (!store?.family_id) return
+    if (!confirm(`למחוק את "${store.name}"?`)) return
+    const { error } = await supabase.from('stores').delete().eq('id', id)
+    if (!error) setStores(prev => prev.filter(s => s.id !== id))
   }
 
   async function saveName() {
@@ -76,17 +104,6 @@ export default function SettingsPage() {
     setCodeCopied(true)
     setTimeout(() => setCodeCopied(false), 2500)
   }
-
-  // ── Section wrapper ──
-  const Section = ({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) => (
-    <div className="card">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-primary-100 rounded-xl p-2">{icon}</div>
-        <h3 className="font-bold text-gray-800 text-base">{title}</h3>
-      </div>
-      {children}
-    </div>
-  )
 
   return (
     <div className="space-y-4 pb-32">
@@ -119,7 +136,6 @@ export default function SettingsPage() {
       {/* ── Family ── */}
       {family ? (
         <Section icon={<Users className="w-5 h-5 text-primary-600" />} title={family.name}>
-          {/* Invite code */}
           <label className="block text-sm text-gray-500 mb-1.5">
             שתף קוד הזמנה עם בני המשפחה
           </label>
@@ -140,7 +156,6 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* Members */}
           <p className="text-sm font-semibold text-gray-600 mb-3">
             חברי המשפחה ({members.length})
           </p>
@@ -172,11 +187,11 @@ export default function SettingsPage() {
       {/* ── Stores ── */}
       <Section icon={<StoreIcon className="w-5 h-5 text-primary-600" />} title="חנויות">
         {/* Add store */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-1">
           <input
             type="text"
             value={newStoreName}
-            onChange={e => setNewStoreName(e.target.value)}
+            onChange={e => { setNewStoreName(e.target.value); setStoreError(null) }}
             onKeyDown={e => e.key === 'Enter' && addStore()}
             placeholder="שם חנות חדשה..."
             className="input flex-1 text-sm"
@@ -192,22 +207,29 @@ export default function SettingsPage() {
             }
           </button>
         </div>
+        {storeError && (
+          <p className="text-xs text-red-500 mb-3 px-1">{storeError}</p>
+        )}
 
         {/* Store list */}
         {stores.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-2">אין חנויות מוגדרות עדיין</p>
+          <p className="text-sm text-gray-400 text-center py-3">אין חנויות מוגדרות עדיין</p>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-50 mt-3">
             {stores.map(s => (
               <div key={s.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                 <div className="w-2.5 h-2.5 rounded-full bg-primary-400 flex-shrink-0" />
                 <span className="flex-1 font-medium text-gray-700">{s.name}</span>
-                <button
-                  onClick={() => deleteStore(s.id)}
-                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {s.family_id ? (
+                  <button
+                    onClick={() => deleteStore(s.id)}
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-300">משותף</span>
+                )}
               </div>
             ))}
           </div>
