@@ -1,48 +1,24 @@
 import { useState } from 'react'
-import { ShoppingCart, Mail, Lock, User } from 'lucide-react'
+import { ShoppingCart, Mail, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-type Mode = 'login' | 'register'
-
 export default function AuthPage() {
-  const [mode, setMode] = useState<Mode>('login')
-  const [fullName, setFullName] = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
-  const [info, setInfo]         = useState<string | null>(null)
-
-  function switchMode(m: Mode) {
-    setMode(m)
-    setError(null)
-    setInfo(null)
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
-    setInfo(null)
 
     try {
-      if (mode === 'register') {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: fullName.trim() } },
-        })
-        if (error) throw error
-        setInfo('נשלח אליך אימייל אימות — בדוק את תיבת הדואר ואשר את החשבון')
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('Invalid login credentials'))  setError('אימייל או סיסמה שגויים')
-      else if (msg.includes('already registered'))    setError('אימייל זה כבר רשום במערכת')
-      else if (msg.includes('Password should be'))    setError('הסיסמה חייבת להכיל לפחות 6 תווים')
       else setError(msg)
     } finally {
       setLoading(false)
@@ -64,28 +40,10 @@ export default function AuthPage() {
       {/* Card */}
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-7">
         <h2 className="text-2xl font-extrabold text-gray-800 mb-6 text-center">
-          {mode === 'login' ? 'ברוך השב 👋' : 'יצירת חשבון'}
+          ברוך השב 👋
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-600 mb-1.5">שם מלא</label>
-              <div className="relative">
-                <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  className="input pr-10"
-                  placeholder="ישראל ישראלי"
-                  required
-                  autoComplete="name"
-                />
-              </div>
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-semibold text-gray-600 mb-1.5">אימייל</label>
             <div className="relative">
@@ -112,11 +70,11 @@ export default function AuthPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="input pr-10"
-                placeholder={mode === 'register' ? 'לפחות 6 תווים' : '••••••••'}
+                placeholder="••••••••"
                 dir="ltr"
                 required
                 minLength={6}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                autoComplete="current-password"
               />
             </div>
           </div>
@@ -126,40 +84,19 @@ export default function AuthPage() {
               {error}
             </div>
           )}
-          {info && (
-            <div className="bg-primary-50 border border-primary-100 text-primary-700 text-sm p-3 rounded-xl text-center">
-              {info}
-            </div>
-          )}
 
           <button
             type="submit"
             disabled={loading}
             className="btn-primary w-full mt-2 text-base py-3.5"
           >
-            {loading
-              ? 'רגע...'
-              : mode === 'login' ? 'כניסה למערכת' : 'יצירת חשבון'}
+            {loading ? 'רגע...' : 'כניסה למערכת'}
           </button>
         </form>
 
-        <div className="mt-5 text-center text-sm text-gray-500">
-          {mode === 'login' ? (
-            <>
-              אין לך חשבון?{' '}
-              <button onClick={() => switchMode('register')} className="text-primary-600 font-bold">
-                הרשמה
-              </button>
-            </>
-          ) : (
-            <>
-              יש לך חשבון?{' '}
-              <button onClick={() => switchMode('login')} className="text-primary-600 font-bold">
-                התחברות
-              </button>
-            </>
-          )}
-        </div>
+        <p className="mt-5 text-center text-xs text-gray-400">
+          הרשמה למערכת אפשרית רק באמצעות הזמנה מהמנהל
+        </p>
       </div>
     </div>
   )
