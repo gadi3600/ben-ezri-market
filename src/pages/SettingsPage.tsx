@@ -257,13 +257,15 @@ export default function SettingsPage() {
                     />
                     <button
                       onClick={() => saveEditStore(s.id)}
-                      className="p-1.5 rounded-lg text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
+                      className="p-2 rounded-lg text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
+                      title="שמור"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setEditingStoreId(null)}
-                      className="p-1.5 rounded-lg text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0"
+                      className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                      title="בטל"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -274,17 +276,15 @@ export default function SettingsPage() {
                     <span className="flex-1 font-medium text-gray-700 text-sm">{s.name}</span>
                     <button
                       onClick={() => startEditStore(s.id, s.name)}
-                      className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0"
-                      title="ערוך שם"
+                      className="p-2 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => deleteStore(s.id, s.name)}
-                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-                      title="מחק"
+                      className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors flex-shrink-0"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </>
                 )}
