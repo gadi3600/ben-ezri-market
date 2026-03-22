@@ -212,7 +212,6 @@ function ItemRow({
   onEdit,
   onLightbox,
   onToggleSelect,
-  onLongPress,
 }: {
   item: ListItemWithUser
   currentUserId: string
@@ -224,65 +223,17 @@ function ItemRow({
   onEdit: (item: ListItemWithUser) => void
   onLightbox: (src: string) => void
   onToggleSelect: (id: string) => void
-  onLongPress: () => void
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
     : null
 
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressFired = useRef(false)
-
-  function clearLongPress() {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
-
-  function handleTouchStart(e: React.TouchEvent | React.MouseEvent) {
-    longPressFired.current = false
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true
-      // Prevent context menu on mobile
-      onLongPress()
-      onToggleSelect(item.id)
-    }, 500)
-    // Prevent text selection during long press
-    e.preventDefault?.()
-  }
-
-  function handleTouchEnd() {
-    clearLongPress()
-  }
-
-  function handleClick(e: React.MouseEvent) {
-    // Don't trigger click if long press just fired
-    if (longPressFired.current) {
-      e.preventDefault()
-      e.stopPropagation()
-      longPressFired.current = false
-      return
-    }
-    if (selectMode) {
-      onToggleSelect(item.id)
-    }
-  }
-
   return (
     <div
-      className={`bg-white rounded-2xl px-4 py-3 shadow-sm border transition-all duration-150 select-none ${
+      className={`bg-white rounded-2xl px-4 py-3 shadow-sm border transition-all duration-150 ${
         selected ? 'border-primary-300 bg-primary-50/40' : 'border-gray-100'
       }`}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={clearLongPress}
-      onTouchCancel={clearLongPress}
-      onMouseDown={handleTouchStart}
-      onMouseUp={handleTouchEnd}
-      onMouseLeave={clearLongPress}
-      onClick={handleClick}
-      onContextMenu={e => e.preventDefault()}
+      onClick={selectMode ? () => onToggleSelect(item.id) : undefined}
     >
       <div className="flex items-center gap-3">
         {/* Selection checkbox (in select mode) */}
@@ -705,12 +656,24 @@ export default function ListPage() {
               {itemCount > 0 ? `${itemCount} פריטים ברשימה` : 'הרשימה ריקה'}
             </p>
           </div>
-          {itemCount > 0 && (
-            <div className="text-center">
-              <div className="text-3xl font-extrabold text-primary-600 leading-none">{itemCount}</div>
-              <div className="text-xs text-primary-400 mt-0.5">פריטים</div>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Select button (admin only, when items exist) */}
+            {itemCount > 0 && isAdmin(profile!.role) && !selectMode && (
+              <button
+                onClick={() => setSelectMode(true)}
+                className="text-xs font-semibold text-primary-600 px-3 py-1.5 rounded-xl
+                           bg-white/70 hover:bg-white transition-colors"
+              >
+                בחר
+              </button>
+            )}
+            {itemCount > 0 && !selectMode && (
+              <div className="text-center">
+                <div className="text-3xl font-extrabold text-primary-600 leading-none">{itemCount}</div>
+                <div className="text-xs text-primary-400 mt-0.5">פריטים</div>
+              </div>
+            )}
+          </div>
         </div>
         <button
           onClick={() => navigate('/list-history')}
@@ -766,7 +729,6 @@ export default function ListPage() {
               onQtyChange={updateQty} onDelete={deleteItem}
               onEdit={setEditingItem} onLightbox={setLightboxSrc}
               onToggleSelect={toggleSelect}
-              onLongPress={() => { if (isAdmin(profile!.role)) setSelectMode(true) }}
             />
           ))}
         </div>
