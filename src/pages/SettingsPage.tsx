@@ -139,20 +139,28 @@ export default function SettingsPage() {
   async function sendInvite() {
     if (!newInviteEmail.trim() || !profile?.family_id || inviting) return
     setInviting(true)
-    const { data, error } = await supabase.from('invites').insert({
+
+    const payload = {
       email:      newInviteEmail.trim().toLowerCase(),
       role:       newInviteRole,
       family_id:  profile.family_id,
       invited_by: profile.id,
-    }).select('id').single()
+    }
+
+    alert(`שולח הזמנה...\nfamily_id: ${payload.family_id}\nemail: ${payload.email}\nrole: ${payload.role}\nprofile.role: ${profile.role}`)
+
+    const { data, error } = await supabase.from('invites').insert(payload).select('id').single()
+
     if (error) {
-      alert(error.message.includes('duplicate') ? 'הזמנה לאימייל זה כבר קיימת' : error.message)
+      alert(`שגיאה מסופאבייס:\ncode: ${error.code}\nmessage: ${error.message}\ndetails: ${error.details ?? 'none'}\nhint: ${error.hint ?? 'none'}`)
     } else if (data) {
       const link = inviteLink(data.id, newInviteRole)
       await navigator.clipboard.writeText(link).catch(() => {})
-      alert('הלינק הועתק! שלח אותו למוזמן ב-WhatsApp, SMS וכו\'')
+      alert(`הזמנה נוצרה בהצלחה!\n\nלינק:\n${link}`)
       setNewInviteEmail('')
       await loadInvites(profile.family_id)
+    } else {
+      alert('תגובה לא צפויה: אין data ואין error')
     }
     setInviting(false)
   }
