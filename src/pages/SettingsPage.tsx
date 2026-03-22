@@ -57,31 +57,45 @@ export default function SettingsPage() {
 
   async function checkPushStatus() {
     if (!profile) return
-    const { data } = await supabase
-      .from('push_subscriptions')
-      .select('id')
-      .eq('user_id', profile.id)
-      .maybeSingle()
-    setPushEnabled(!!data)
+    try {
+      const { data, error } = await supabase
+        .from('push_subscriptions')
+        .select('id')
+        .eq('user_id', profile.id)
+        .maybeSingle()
+      if (error) {
+        console.warn('checkPushStatus error:', error.message)
+        setPushEnabled(false)
+        return
+      }
+      setPushEnabled(!!data)
+    } catch {
+      setPushEnabled(false)
+    }
   }
 
   async function togglePush() {
     if (!profile?.family_id) return
     setPushLoading(true)
 
-    if (pushEnabled) {
-      // Disable: delete subscription from Supabase
-      await supabase.from('push_subscriptions').delete().eq('user_id', profile.id)
-      // Clear localStorage so banner shows again next time
-      localStorage.removeItem('pushBannerDismissed')
-      setPushEnabled(false)
-    } else {
-      // Enable: register push
-      const ok = await registerPushSubscription(profile.id, profile.family_id)
-      if (ok) {
-        setPushEnabled(true)
-        localStorage.setItem('pushBannerDismissed', 'true')
+    try {
+      if (pushEnabled) {
+        // Disable: delete subscription from Supabase
+        await supabase.from('push_subscriptions').delete().eq('user_id', profile.id)
+        localStorage.removeItem('pushBannerDismissed')
+        setPushEnabled(false)
+      } else {
+        // Enable: register push — this requests browser permission
+        console.log('togglePush: calling registerPushSubscription...')
+        const ok = await registerPushSubscription(profile.id, profile.family_id)
+        console.log('togglePush: result =', ok)
+        if (ok) {
+          setPushEnabled(true)
+          localStorage.setItem('pushBannerDismissed', 'true')
+        }
       }
+    } catch (err) {
+      console.error('togglePush error:', err)
     }
 
     setPushLoading(false)
