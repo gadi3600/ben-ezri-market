@@ -95,12 +95,8 @@ export default function SettingsPage() {
       .update({ name: trimmed })
       .eq('id', id)
     if (!error) {
-      setStores(prev =>
-        prev
-          .map(s => s.id === id ? { ...s, name: trimmed } : s)
-          .sort((a, b) => a.name.localeCompare(b.name, 'he')),
-      )
       setEditingStoreId(null)
+      await loadStores()
     }
   }
 
