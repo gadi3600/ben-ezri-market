@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera,
-  X, MessageSquare,
+  X, MessageSquare, ClipboardList,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -285,6 +286,7 @@ function ItemRow({
 
 export default function ListPage() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [list, setList]           = useState<ShoppingList | null>(null)
   const [items, setItems]         = useState<ListItemWithUser[]>([])
   const [newName, setNewName]     = useState('')
@@ -514,19 +516,29 @@ export default function ListPage() {
       )}
 
       {/* Header card */}
-      <div className="card-green mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="font-extrabold text-primary-800 text-lg leading-tight">{list.name}</h2>
-          <p className="text-sm text-primary-600 mt-0.5">
-            {itemCount > 0 ? `${itemCount} פריטים ברשימה` : 'הרשימה ריקה'}
-          </p>
-        </div>
-        {itemCount > 0 && (
-          <div className="text-center">
-            <div className="text-3xl font-extrabold text-primary-600 leading-none">{itemCount}</div>
-            <div className="text-xs text-primary-400 mt-0.5">פריטים</div>
+      <div className="card-green mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-extrabold text-primary-800 text-lg leading-tight">{list.name}</h2>
+            <p className="text-sm text-primary-600 mt-0.5">
+              {itemCount > 0 ? `${itemCount} פריטים ברשימה` : 'הרשימה ריקה'}
+            </p>
           </div>
-        )}
+          {itemCount > 0 && (
+            <div className="text-center">
+              <div className="text-3xl font-extrabold text-primary-600 leading-none">{itemCount}</div>
+              <div className="text-xs text-primary-400 mt-0.5">פריטים</div>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => navigate('/list-history')}
+          className="mt-3 flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700
+                     font-medium transition-colors"
+        >
+          <ClipboardList className="w-3.5 h-3.5" />
+          היסטוריית רשימות
+        </button>
       </div>
 
       {/* Empty state */}

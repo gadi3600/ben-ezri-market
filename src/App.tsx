@@ -7,6 +7,7 @@ import ListPage        from './pages/ListPage'
 import ShopPage        from './pages/ShopPage'
 import HistoryPage     from './pages/HistoryPage'
 import SettingsPage    from './pages/SettingsPage'
+import ListHistoryPage from './pages/ListHistoryPage'
 
 // ── Nav items ───────────────────────────────────────────────────────────────
 
@@ -63,8 +64,9 @@ function AppContent() {
           <Route path="/"         element={<ListPage />}     />
           <Route path="/shop"     element={<ShopPage />}     />
           <Route path="/history"  element={<HistoryPage />}  />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*"         element={<Navigate to="/" replace />} />
+          <Route path="/settings"     element={<SettingsPage />} />
+          <Route path="/list-history" element={<ListHistoryPage />} />
+          <Route path="*"             element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
