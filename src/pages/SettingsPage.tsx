@@ -226,13 +226,40 @@ export default function SettingsPage() {
   }
 
   async function changeUserRole(userId: string, newRole: Role) {
-    await supabase.from('users').update({ role: newRole }).eq('id', userId)
+    if (!profile?.family_id) return
+    const currentMember = members.find(m => m.id === userId)
+
+    // Prevent demoting last admin (unless superadmin)
+    if (currentMember?.role === 'admin' && newRole !== 'admin' && !profile.is_superadmin) {
+      const adminCount = members.filter(m => m.role === 'admin').length
+      if (adminCount <= 1) {
+        alert('לא ניתן לשנות את התפקיד של המנהל האחרון במשפחה')
+        return
+      }
+    }
+
+    await Promise.all([
+      supabase.from('family_members').update({ role: newRole }).eq('user_id', userId).eq('family_id', profile.family_id),
+      supabase.from('users').update({ role: newRole }).eq('id', userId),
+    ])
     setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
   }
 
   async function removeUser(userId: string, name: string) {
+    if (!profile?.family_id) return
+
+    // Prevent removing last admin (unless superadmin)
+    const member = members.find(m => m.id === userId)
+    if (member?.role === 'admin' && !profile.is_superadmin) {
+      const adminCount = members.filter(m => m.role === 'admin').length
+      if (adminCount <= 1) {
+        alert('לא ניתן להסיר את המנהל האחרון מהמשפחה')
+        return
+      }
+    }
+
     if (!confirm(`להסיר את ${name} מהמשפחה?`)) return
-    await supabase.from('users').update({ family_id: null, role: 'member' }).eq('id', userId)
+    await supabase.from('family_members').delete().eq('user_id', userId).eq('family_id', profile.family_id)
     setMembers(prev => prev.filter(m => m.id !== userId))
   }
 
