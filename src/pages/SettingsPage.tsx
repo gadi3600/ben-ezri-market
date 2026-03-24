@@ -215,10 +215,16 @@ export default function SettingsPage() {
   // ── Superadmin functions ──
   async function loadAllFamilies() {
     // Two separate queries — avoids join/RLS issues
-    const [{ data: fams }, { data: members }] = await Promise.all([
+    const [famsRes, membersRes] = await Promise.all([
       supabase.from('families').select('id, name').order('name'),
       supabase.from('family_members').select('family_id'),
     ])
+    const fams = famsRes.data
+    const members = membersRes.data
+    console.log('loadAllFamilies:', {
+      fams: fams?.length ?? 0, famsError: famsRes.error?.message ?? null,
+      members: members?.length ?? 0, membersError: membersRes.error?.message ?? null,
+    })
 
     if (!fams) return
 
