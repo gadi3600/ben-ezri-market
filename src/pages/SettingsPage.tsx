@@ -238,18 +238,12 @@ export default function SettingsPage() {
       }
     }
 
-    const familyId = profile.family_id
-    alert(`מעדכן: user=${userId}, family=${familyId}, newRole=${newRole}`)
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('family_members')
       .update({ role: newRole })
       .eq('user_id', userId)
-      .eq('family_id', familyId)
-    if (error) {
-      alert('שגיאה בעדכון תפקיד: ' + error.message)
-      return
-    }
-    alert(`עודכן! count=${count}`)
+      .eq('family_id', profile.family_id)
+    if (error) return
     setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
   }
 
