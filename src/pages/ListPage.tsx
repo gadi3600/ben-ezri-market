@@ -504,10 +504,16 @@ export default function ListPage() {
 
   async function loadSuggestions() {
     if (!profile?.family_id) return
-    // Use purchase_items for suggestions (already filtered by family via RLS)
+    // Get purchase IDs for this family, then get item names
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('id')
+      .eq('family_id', profile.family_id)
+    if (!purchases?.length) return
     const { data } = await supabase
       .from('purchase_items')
       .select('name')
+      .in('purchase_id', purchases.map(p => p.id))
       .limit(500)
     if (data) {
       const unique = [...new Set(data.map(r => r.name as string).filter(Boolean))]
