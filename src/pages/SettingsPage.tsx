@@ -338,9 +338,8 @@ export default function SettingsPage() {
   }
 
   async function createNewFamily() {
-    if (!newFamilyName.trim() || !newFamilyEmail.trim() || creatingFamily) return
+    if (!newFamilyName.trim() || creatingFamily) return
     setCreatingFamily(true)
-    // Create family
     const { data: fam, error: famErr } = await supabase
       .from('families')
       .insert({ name: newFamilyName.trim() })
@@ -351,21 +350,25 @@ export default function SettingsPage() {
       setCreatingFamily(false)
       return
     }
-    // Create invite for the admin
-    const { data: inv } = await supabase
-      .from('invites')
-      .insert({
-        email: newFamilyEmail.trim().toLowerCase(),
-        role: 'admin',
-        family_id: fam.id,
-        invited_by: profile!.id,
-      })
-      .select('id')
-      .single()
-    if (inv) {
-      const link = `${window.location.origin}/join?token=${inv.id}&role=admin`
-      fallbackCopy(link)
-      alert(`משפחה נוצרה!\n\nלינק הזמנה למנהל:\n${link}\n\n(הלינק הועתק ללוח)`)
+    if (newFamilyEmail.trim()) {
+      // Create invite for the admin
+      const { data: inv } = await supabase
+        .from('invites')
+        .insert({
+          email: newFamilyEmail.trim().toLowerCase(),
+          role: 'admin',
+          family_id: fam.id,
+          invited_by: profile!.id,
+        })
+        .select('id')
+        .single()
+      if (inv) {
+        const link = `${window.location.origin}/join?token=${inv.id}&role=admin`
+        fallbackCopy(link)
+        alert(`משפחה נוצרה!\n\nלינק הזמנה למנהל:\n${link}\n\n(הלינק הועתק ללוח)`)
+      }
+    } else {
+      alert('משפחה נוצרה בהצלחה!')
     }
     setNewFamilyName('')
     setNewFamilyEmail('')
@@ -889,11 +892,11 @@ export default function SettingsPage() {
             />
             <button
               onClick={createNewFamily}
-              disabled={!newFamilyName.trim() || !newFamilyEmail.trim() || creatingFamily}
+              disabled={!newFamilyName.trim() || creatingFamily}
               className="btn-primary w-full text-sm"
             >
               {creatingFamily ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              צור משפחה + שלח הזמנה למנהל
+              {newFamilyEmail.trim() ? 'צור משפחה + שלח הזמנה למנהל' : 'צור משפחה'}
             </button>
           </div>
         </Section>
