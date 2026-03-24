@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ShoppingCart, Mail, Lock, User, Loader2 } from 'lucide-react'
+import { ShoppingCart, Mail, Lock, User, Loader2, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { roleLabel } from '../lib/permissions'
 import type { Role } from '../lib/permissions'
@@ -20,6 +20,7 @@ export default function JoinPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
+  const [showPass, setShowPass] = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [info, setInfo]         = useState<string | null>(null)
 
@@ -189,16 +190,23 @@ export default function JoinPage() {
             <div className="relative">
               <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
-                type="password"
+                type={showPass ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="input pr-10"
+                className="input pr-10 pl-10"
                 placeholder={mode === 'register' ? 'לפחות 6 תווים' : '••••••••'}
                 dir="ltr"
                 required
                 minLength={6}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
+              <button
+                type="button"
+                onClick={() => setShowPass(v => !v)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import {
   User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown,
-  Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell, Mail,
+  Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell, Mail, KeyRound,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -278,6 +278,19 @@ export default function SettingsPage() {
     const { data } = await supabase.rpc('search_users', { query: query.trim() })
     const memberIds = new Set(members.map(m => m.id))
     setUserResults(((data ?? []) as { id: string; full_name: string; email: string }[]).filter(u => !memberIds.has(u.id)))
+  }
+
+  async function resetUserPassword(userId: string, userName: string) {
+    // Find user's email via RPC
+    const { data } = await supabase.rpc('search_users', { query: userName })
+    const user = (data as { id: string; email: string }[] | null)?.find(u => u.id === userId)
+    if (!user?.email) { alert('לא נמצא אימייל למשתמש'); return }
+    if (!confirm(`לשלוח מייל איפוס סיסמה ל-${userName} (${user.email})?`)) return
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/`,
+    })
+    if (error) { alert('שגיאה: ' + error.message); return }
+    alert(`נשלח מייל איפוס סיסמה ל-${user.email}`)
   }
 
   async function addExistingUser(userId: string, userName: string) {
@@ -574,6 +587,16 @@ export default function SettingsPage() {
                       <option value="member">חבר</option>
                       <option value="viewer">צופה</option>
                     </select>
+                    {profile?.is_superadmin && (
+                      <button
+                        onClick={() => resetUserPassword(m.id, m.full_name)}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-amber-500
+                                   hover:bg-amber-50 transition-colors flex-shrink-0"
+                        title="איפוס סיסמה"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => removeUser(m.id, m.full_name)}
                       className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
