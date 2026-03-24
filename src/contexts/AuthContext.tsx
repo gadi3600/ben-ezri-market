@@ -40,7 +40,7 @@ async function fetchMemberships(userId: string): Promise<FamilyMembership[]> {
     .from('family_members')
     .select('id, family_id, role, families(name)')
     .eq('user_id', userId)
-  console.log('fetchMemberships:', { userId, count: data?.length ?? 0, error: error?.message ?? null })
+  console.log('fetchMemberships:', { userId, count: data?.length ?? 0, error: error?.message ?? null, data })
   if (!data) return []
   return data.map((row: { id: string; family_id: string; role: string; families: unknown }) => {
     const fam = Array.isArray(row.families) ? row.families[0] : row.families
@@ -100,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         family_name: fam?.name ?? 'משפחה',
       }]
     }
+    console.log('loadProfile: finalMemberships =', finalMemberships, 'activeFamilyId will be =', localStorage.getItem('activeFamilyId') ?? finalMemberships[0]?.family_id ?? 'none')
     setFamilies(finalMemberships)
 
     // Set active family: saved preference → first membership → profile.family_id
