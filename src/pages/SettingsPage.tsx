@@ -27,7 +27,7 @@ function Section({ icon, title, children }: { icon: ReactNode; title: string; ch
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { profile, refreshProfile, signOut, setViewingFamily } = useAuth()
+  const { profile, refreshProfile, signOut, setViewingFamily, families, switchFamily, activeFamilyId } = useAuth()
   const [family, setFamily]   = useState<Family | null>(null)
   const [members, setMembers] = useState<UserProfile[]>([])
   const [stores, setStores]   = useState<Store[]>([])
@@ -358,6 +358,33 @@ export default function SettingsPage() {
     <div className="space-y-4 pb-32">
 
       {/* ── Profile ── */}
+      {/* ── Family switcher (if multiple families) ── */}
+      {families.length > 1 && (
+        <div className="card mb-4">
+          <p className="text-sm font-bold text-gray-700 mb-2">המשפחות שלי</p>
+          <div className="space-y-1">
+            {families.map(f => (
+              <button
+                key={f.family_id}
+                onClick={() => switchFamily(f.family_id)}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                  f.family_id === activeFamilyId
+                    ? 'bg-primary-50 text-primary-700 font-bold'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 text-right">{f.family_name}</span>
+                <span className="text-xs text-gray-400">{roleLabel(f.role)}</span>
+                {f.family_id === activeFamilyId && (
+                  <CheckCircle2 className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <Section icon={<User className="w-5 h-5 text-primary-600" />} title="הפרופיל שלי">
         <label className="block text-sm text-gray-500 mb-1.5">שם מלא</label>
         <div className="flex gap-2">

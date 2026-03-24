@@ -33,7 +33,7 @@ const navItems = [
 // ── Inner app (needs AuthContext) ────────────────────────────────────────────
 
 function AppContent() {
-  const { session, profile, loading, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
+  const { session, profile, loading, activeFamilyName, families, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
   const location = useLocation()
 
   // Join page — accessible without login
@@ -79,8 +79,11 @@ function AppContent() {
             <h1 className="text-xl font-extrabold leading-tight tracking-tight">בן עזרי מרקט</h1>
             <p className="text-primary-100 text-xs font-medium truncate">
               שלום, {profile.full_name} 👋
+              {activeFamilyName && !viewingFamilyId && families.length > 1 && (
+                <span className="mr-1">· {activeFamilyName}</span>
+              )}
               {viewingFamilyId && viewingFamilyName && (
-                <span className="mr-2">· צופה ב{viewingFamilyName}</span>
+                <span className="mr-1">· צופה ב{viewingFamilyName}</span>
               )}
             </p>
           </div>

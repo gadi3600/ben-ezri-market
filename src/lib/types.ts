@@ -5,6 +5,13 @@ export interface Family {
   created_at: string
 }
 
+export interface FamilyMembership {
+  id: string
+  family_id: string
+  role: 'admin' | 'member' | 'viewer'
+  family_name: string
+}
+
 export interface UserProfile {
   id: string
   family_id: string | null
