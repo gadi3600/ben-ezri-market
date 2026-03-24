@@ -130,20 +130,26 @@ function AppContent() {
               שלום, {profile.full_name} 👋
             </p>
           </div>
-          {/* Family switcher button */}
-          {(families.length > 1 || profile.is_superadmin) && (
+          {/* Family name / switcher */}
+          {activeFamilyName && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                onClick={() => setShowFamilyPicker(true)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
-                  viewingFamilyId
-                    ? 'bg-amber-500/80 hover:bg-amber-500 text-white'
-                    : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              >
-                {viewingFamilyName ?? activeFamilyName ?? 'בחר משפחה'}
-                <ChevronDown className="w-3 h-3" />
-              </button>
+              {(families.length > 1 || profile.is_superadmin) ? (
+                <button
+                  onClick={() => setShowFamilyPicker(true)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+                    viewingFamilyId
+                      ? 'bg-amber-500/80 hover:bg-amber-500 text-white'
+                      : 'bg-white/20 hover:bg-white/30 text-white'
+                  }`}
+                >
+                  {viewingFamilyName ?? activeFamilyName}
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+              ) : (
+                <span className="text-xs font-semibold text-primary-100 px-3 py-1.5">
+                  {activeFamilyName}
+                </span>
+              )}
               {viewingFamilyId && (
                 <button
                   onClick={() => setViewingFamily(null)}
