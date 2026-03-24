@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera,
@@ -206,7 +206,7 @@ function EditItemModal({
 
 // ── Item row ────────────────────────────────────────────────────────────────
 
-function ItemRow({
+const ItemRow = memo(function ItemRow({
   item,
   currentUserId,
   readOnly,
@@ -362,7 +362,7 @@ function ItemRow({
       )}
     </div>
   )
-}
+})
 
 // ── ListPage ────────────────────────────────────────────────────────────────
 

@@ -1,14 +1,25 @@
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { ShoppingCart, Store, History, Settings } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AuthPage        from './pages/AuthPage'
 import FamilySetupPage from './pages/FamilySetupPage'
-import ListPage        from './pages/ListPage'
-import ShopPage        from './pages/ShopPage'
-import HistoryPage     from './pages/HistoryPage'
-import SettingsPage    from './pages/SettingsPage'
-import ListHistoryPage from './pages/ListHistoryPage'
 import JoinPage        from './pages/JoinPage'
+
+// Lazy load heavy pages
+const ListPage        = lazy(() => import('./pages/ListPage'))
+const ShopPage        = lazy(() => import('./pages/ShopPage'))
+const HistoryPage     = lazy(() => import('./pages/HistoryPage'))
+const SettingsPage    = lazy(() => import('./pages/SettingsPage'))
+const ListHistoryPage = lazy(() => import('./pages/ListHistoryPage'))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-4 border-primary-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
 
 // ── Nav items ───────────────────────────────────────────────────────────────
 
@@ -65,14 +76,16 @@ function AppContent() {
 
       {/* ── Main ── */}
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-4">
-        <Routes>
-          <Route path="/"         element={<ListPage />}     />
-          <Route path="/shop"     element={<ShopPage />}     />
-          <Route path="/history"  element={<HistoryPage />}  />
-          <Route path="/settings"     element={<SettingsPage />} />
-          <Route path="/list-history" element={<ListHistoryPage />} />
-          <Route path="*"             element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/"         element={<ListPage />}     />
+            <Route path="/shop"     element={<ShopPage />}     />
+            <Route path="/history"  element={<HistoryPage />}  />
+            <Route path="/settings"     element={<SettingsPage />} />
+            <Route path="/list-history" element={<ListHistoryPage />} />
+            <Route path="*"             element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {/* ── Bottom navigation ── */}

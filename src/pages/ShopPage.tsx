@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import {
   ShoppingCart, CheckCircle2, Trophy,
   ChevronDown, ChevronUp, ArrowLeft, Undo2,
@@ -237,7 +237,7 @@ const ALL_CATEGORIES = CATEGORY_ORDER.map(id => {
   return allCats[id]
 }).filter(Boolean) as Category[]
 
-function ActiveItem({
+const ActiveItem = memo(function ActiveItem({
   item,
   itemCategory,
   readOnly,
@@ -393,11 +393,11 @@ function ActiveItem({
       )}
     </div>
   )
-}
+})
 
 // ── DeferredItem ──────────────────────────────────────────────────────────────
 
-function DeferredItem({
+const DeferredItem = memo(function DeferredItem({
   item,
   onUndo,
 }: {
@@ -426,7 +426,7 @@ function DeferredItem({
       </button>
     </div>
   )
-}
+})
 
 // ── ShopPage ──────────────────────────────────────────────────────────────────
 
