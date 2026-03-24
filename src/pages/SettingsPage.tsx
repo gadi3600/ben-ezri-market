@@ -64,7 +64,7 @@ export default function SettingsPage() {
 
   // Add existing user to family (superadmin)
   const [userSearch, setUserSearch] = useState('')
-  const [userResults, setUserResults] = useState<{ id: string; full_name: string }[]>([])
+  const [userResults, setUserResults] = useState<{ id: string; full_name: string; email: string }[]>([])
   const [addUserRole, setAddUserRole] = useState<Role>('member')
   const [addingUser, setAddingUser] = useState(false)
 
@@ -275,14 +275,9 @@ export default function SettingsPage() {
   async function searchUsers(query: string) {
     setUserSearch(query)
     if (query.trim().length < 2) { setUserResults([]); return }
-    const { data } = await supabase
-      .from('users')
-      .select('id, full_name')
-      .ilike('full_name', `%${query.trim()}%`)
-      .limit(10)
-    // Filter out users already in this family
+    const { data } = await supabase.rpc('search_users', { query: query.trim() })
     const memberIds = new Set(members.map(m => m.id))
-    setUserResults((data ?? []).filter(u => !memberIds.has(u.id)))
+    setUserResults(((data ?? []) as { id: string; full_name: string; email: string }[]).filter(u => !memberIds.has(u.id)))
   }
 
   async function addExistingUser(userId: string, userName: string) {
@@ -629,7 +624,10 @@ export default function SettingsPage() {
                                       text-xs font-extrabold text-primary-700 flex-shrink-0">
                         {u.full_name.charAt(0)}
                       </div>
-                      <span className="flex-1 font-medium text-gray-700">{u.full_name}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-700 truncate">{u.full_name}</p>
+                        <p className="text-xs text-gray-400 truncate" dir="ltr">{u.email}</p>
+                      </div>
                       <Plus className="w-4 h-4 text-primary-500 flex-shrink-0" />
                     </button>
                   ))}
