@@ -7,12 +7,13 @@ interface AuthContextType {
   session: Session | null
   profile: UserProfile | null
   loading: boolean
+  passwordRecovery: boolean
+  clearPasswordRecovery: () => void
   families: FamilyMembership[]
   activeFamilyId: string | null
   activeFamilyName: string | null
   activeRole: 'admin' | 'member' | 'viewer'
   switchFamily: (familyId: string) => void
-  // Superadmin: view any family
   viewingFamilyId: string | null
   viewingFamilyName: string | null
   setViewingFamily: (id: string | null, name?: string | null) => void
@@ -57,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Superadmin viewing
   const [viewingFamilyId, setViewingFamilyId] = useState<string | null>(null)
   const [viewingFamilyName, setViewingFamilyName] = useState<string | null>(null)
+
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   function setViewingFamily(id: string | null, name?: string | null) {
     setViewingFamilyId(id)
@@ -140,7 +143,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (event === 'SIGNED_IN' && session) {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true)
+      } else if (event === 'SIGNED_IN' && session) {
         loadProfile(session.user.id)
       } else if (event === 'SIGNED_OUT') {
         setProfile(null)
@@ -174,6 +179,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile: profile ? { ...profile, family_id: effectiveFamilyId, role: activeRole } : null,
       loading,
+      passwordRecovery,
+      clearPasswordRecovery: () => setPasswordRecovery(false),
       families,
       activeFamilyId,
       activeFamilyName,

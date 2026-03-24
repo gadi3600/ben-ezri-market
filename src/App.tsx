@@ -1,7 +1,8 @@
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
-import { ShoppingCart, Store, History, Settings, Users, ChevronDown } from 'lucide-react'
+import { ShoppingCart, Store, History, Settings, Users, ChevronDown, Lock, Eye, EyeOff } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { supabase } from './lib/supabase'
 import AuthPage        from './pages/AuthPage'
 import FamilySetupPage from './pages/FamilySetupPage'
 import JoinPage        from './pages/JoinPage'
@@ -30,10 +31,103 @@ const navItems = [
   { to: '/settings',label: 'הגדרות',   emoji: '⚙️', Icon: Settings     },
 ]
 
+// ── Password Reset Screen ─────────────────────────────────────────────────────
+
+function PasswordResetScreen({ onDone }: { onDone: () => void }) {
+  const [newPass, setNewPass]       = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [showPass, setShowPass]     = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (newPass.length < 6) { setError('הסיסמה חייבת להכיל לפחות 6 תווים'); return }
+    if (newPass !== confirmPass) { setError('הסיסמאות לא תואמות'); return }
+    setSaving(true)
+    setError(null)
+    const { error } = await supabase.auth.updateUser({ password: newPass })
+    if (error) {
+      setError(error.message)
+      setSaving(false)
+    } else {
+      onDone()
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-primary-600 to-primary-800 flex flex-col items-center justify-center px-5">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-7">
+        <div className="text-center mb-6">
+          <div className="bg-primary-100 rounded-full p-3 inline-flex mb-3">
+            <Lock className="w-8 h-8 text-primary-600" />
+          </div>
+          <h2 className="text-xl font-extrabold text-gray-800">הגדר סיסמה חדשה</h2>
+          <p className="text-sm text-gray-400 mt-1">הזן סיסמה חדשה לחשבון שלך</p>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-1.5">סיסמה חדשה</label>
+            <div className="relative">
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={newPass}
+                onChange={e => setNewPass(e.target.value)}
+                className="input pl-10"
+                placeholder="לפחות 6 תווים"
+                dir="ltr"
+                required
+                minLength={6}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(v => !v)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-600 mb-1.5">אישור סיסמה</label>
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={confirmPass}
+              onChange={e => setConfirmPass(e.target.value)}
+              className="input"
+              placeholder="הקלד שוב"
+              dir="ltr"
+              required
+              minLength={6}
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-100 text-red-600 text-sm p-3 rounded-xl text-center">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving || !newPass || !confirmPass}
+            className="btn-primary w-full text-base py-3.5"
+          >
+            {saving ? 'שומר...' : 'שמור סיסמה חדשה'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Inner app (needs AuthContext) ────────────────────────────────────────────
 
 function AppContent() {
-  const { session, profile, loading, activeFamilyId, activeFamilyName, families, switchFamily, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
+  const { session, profile, loading, passwordRecovery, clearPasswordRecovery, activeFamilyId, activeFamilyName, families, switchFamily, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
   const location = useLocation()
   const [showFamilyPicker, setShowFamilyPicker] = useState(false)
 
@@ -46,6 +140,9 @@ function AppContent() {
 
   // Join page — accessible without login
   if (location.pathname === '/join') return <JoinPage />
+
+  // Password recovery screen
+  if (passwordRecovery) return <PasswordResetScreen onDone={clearPasswordRecovery} />
 
   // Loading splash
   if (loading) return (
