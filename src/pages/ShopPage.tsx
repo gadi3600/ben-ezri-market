@@ -727,10 +727,11 @@ export default function ShopPage() {
   // ── custom sort order + category overrides (synced to DB) ──
   const [customOrder, setCustomOrder] = useState<string[]>([])
   const [catOverrides, setCatOverrides] = useState<Record<string, string>>({})
-  const [orderLoaded, setOrderLoaded] = useState(false)
-  const savingRef = useRef(false) // prevent save loop from realtime
+  const orderLoadedRef = useRef(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skipRealtimeRef = useRef(false)
 
-  // Load order data from DB
+  // Load order data from DB (once)
   useEffect(() => {
     if (!profile?.family_id) return
     supabase
@@ -742,35 +743,30 @@ export default function ShopPage() {
         for (const row of data ?? []) {
           if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
           if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
-          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data)
+          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
         }
-        setOrderLoaded(true)
+        // Mark loaded after state is set (next tick)
+        setTimeout(() => { orderLoadedRef.current = true }, 100)
       })
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save helper — upsert to DB
-  function saveOrderToDB(type: string, data: unknown) {
-    if (!profile?.family_id) return
-    savingRef.current = true
-    supabase.from('shopping_order').upsert({
-      family_id:  profile.family_id,
-      type,
-      order_data: data,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'family_id,type' }).then(() => {
-      setTimeout(() => { savingRef.current = false }, 500)
-    })
+  // Debounced save — batches all changes into one save per type
+  function saveOrderToDB(type: string, orderData: unknown) {
+    if (!profile?.family_id || !orderLoadedRef.current) return
+    // Debounce: wait 300ms before saving (batches rapid changes)
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      skipRealtimeRef.current = true
+      supabase.from('shopping_order').upsert({
+        family_id:  profile.family_id,
+        type,
+        order_data: orderData,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'family_id,type' }).then(() => {
+        setTimeout(() => { skipRealtimeRef.current = false }, 1000)
+      })
+    }, 300)
   }
-
-  // Save to DB on change
-  useEffect(() => {
-    if (!orderLoaded) return
-    saveOrderToDB('customOrder', customOrder)
-  }, [customOrder]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!orderLoaded) return
-    saveOrderToDB('catOverrides', catOverrides)
-  }, [catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime sync — listen for changes from other users
   useEffect(() => {
@@ -781,11 +777,11 @@ export default function ShopPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'shopping_order', filter: `family_id=eq.${profile.family_id}` },
         (payload) => {
-          if (savingRef.current) return // ignore our own saves
+          if (skipRealtimeRef.current) return
           const row = payload.new as { type: string; order_data: unknown }
           if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
           if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
-          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data)
+          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
         },
       )
       .subscribe()
@@ -848,17 +844,17 @@ export default function ShopPage() {
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= ids.length) return
 
-    // Set category override: moved item takes the category of the item it swaps with
-    const neighborItem = displayOrder[swapIdx]
-    const neighborCat = getItemCategory(neighborItem).id
-    const movedItem = displayOrder[idx]
-    const movedCat = getItemCategory(movedItem).id
+    const neighborCat = getItemCategory(displayOrder[swapIdx]).id
+    const movedCat = getItemCategory(displayOrder[idx]).id
     if (neighborCat !== movedCat) {
-      setCatOverrides(prev => ({ ...prev, [itemId]: neighborCat }))
+      const newOverrides = { ...catOverrides, [itemId]: neighborCat }
+      setCatOverrides(newOverrides)
+      saveOrderToDB('catOverrides', newOverrides)
     }
 
     ;[ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]]
     setCustomOrder(ids)
+    saveOrderToDB('customOrder', ids)
   }
 
   function moveItemTo(itemId: string, targetIdx: number) {
@@ -866,22 +862,27 @@ export default function ShopPage() {
     const fromIdx = ids.indexOf(itemId)
     if (fromIdx < 0 || targetIdx < 0 || targetIdx >= ids.length) return
 
-    // Set category override from target position's neighbor
-    const targetItem = displayOrder[targetIdx]
-    const targetCat = getItemCategory(targetItem).id
+    const targetCat = getItemCategory(displayOrder[targetIdx]).id
     const movedCat = getItemCategory(displayOrder[fromIdx]).id
     if (targetCat !== movedCat) {
-      setCatOverrides(prev => ({ ...prev, [itemId]: targetCat }))
+      const newOverrides = { ...catOverrides, [itemId]: targetCat }
+      setCatOverrides(newOverrides)
+      saveOrderToDB('catOverrides', newOverrides)
     }
 
     ;[ids[fromIdx], ids[targetIdx]] = [ids[targetIdx], ids[fromIdx]]
     setCustomOrder(ids)
+    saveOrderToDB('customOrder', ids)
   }
 
   function changeItemCategory(itemId: string, newCatId: string) {
-    setCatOverrides(prev => ({ ...prev, [itemId]: newCatId }))
+    const newOverrides = { ...catOverrides, [itemId]: newCatId }
+    setCatOverrides(newOverrides)
+    saveOrderToDB('catOverrides', newOverrides)
     if (customOrder.length === 0) {
-      setCustomOrder(displayOrder.map(i => i.id))
+      const newOrder = displayOrder.map(i => i.id)
+      setCustomOrder(newOrder)
+      saveOrderToDB('customOrder', newOrder)
     }
     // Save to DB for future sessions
     const item = items.find(i => i.id === itemId)
@@ -914,11 +915,6 @@ export default function ShopPage() {
     if (collapsedCats.size > 0) localStorage.setItem('shopCollapsedCats', JSON.stringify([...collapsedCats]))
     else localStorage.removeItem('shopCollapsedCats')
   }, [collapsedCats])
-
-  useEffect(() => {
-    if (!orderLoaded) return
-    saveOrderToDB('catOrder', catOrder)
-  }, [catOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply custom category order to groupedActive
   const sortedGroups = useMemo(() => {
@@ -961,6 +957,7 @@ export default function ShopPage() {
     if (swapIdx < 0 || swapIdx >= currentOrder.length) return
     ;[currentOrder[idx], currentOrder[swapIdx]] = [currentOrder[swapIdx], currentOrder[idx]]
     setCatOrder(currentOrder)
+    saveOrderToDB('catOrder', currentOrder)
   }
 
   function resetOrder() {
