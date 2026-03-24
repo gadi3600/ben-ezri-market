@@ -78,7 +78,7 @@ function AppContent() {
     <div className="min-h-screen flex flex-col bg-gray-50">
 
       {/* ── Family Picker Modal ── */}
-      {showFamilyPicker && families.length > 1 && (
+      {showFamilyPicker && (families.length > 1 || profile.is_superadmin) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowFamilyPicker(false)} />
           <div className="relative bg-white rounded-3xl shadow-2xl w-[85%] max-w-sm p-6">
@@ -130,8 +130,8 @@ function AppContent() {
               שלום, {profile.full_name} 👋
             </p>
           </div>
-          {/* Family name button (when multiple families) */}
-          {families.length > 1 && !viewingFamilyId && activeFamilyName && (
+          {/* Family name button (multiple families or superadmin) */}
+          {(families.length > 1 || profile.is_superadmin) && !viewingFamilyId && activeFamilyName && (
             <button
               onClick={() => setShowFamilyPicker(true)}
               className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
