@@ -214,35 +214,25 @@ export default function SettingsPage() {
 
   // ── Superadmin functions ──
   async function loadAllFamilies() {
-    // Try with member count, fallback to without
-    const { data, error } = await supabase
-      .from('families')
-      .select('id, name, family_members(count)')
-      .order('name')
+    // Two separate queries — avoids join/RLS issues
+    const [{ data: fams }, { data: members }] = await Promise.all([
+      supabase.from('families').select('id, name').order('name'),
+      supabase.from('family_members').select('family_id'),
+    ])
 
-    if (error) {
-      // Fallback: load without join
-      const { data: simple } = await supabase
-        .from('families')
-        .select('id, name')
-        .order('name')
-      if (simple) {
-        setAllFamilies(simple.map((f: { id: string; name: string }) => ({
-          id: f.id,
-          name: f.name ?? 'ללא שם',
-          member_count: 0,
-        })))
-      }
-      return
+    if (!fams) return
+
+    // Count members per family on client
+    const countMap: Record<string, number> = {}
+    for (const m of members ?? []) {
+      countMap[m.family_id] = (countMap[m.family_id] ?? 0) + 1
     }
 
-    if (data) {
-      setAllFamilies(data.map((f: { id: string; name: string; family_members: { count: number }[] }) => ({
-        id: f.id,
-        name: f.name ?? 'ללא שם',
-        member_count: f.family_members?.[0]?.count ?? 0,
-      })))
-    }
+    setAllFamilies(fams.map((f: { id: string; name: string }) => ({
+      id: f.id,
+      name: f.name ?? 'ללא שם',
+      member_count: countMap[f.id] ?? 0,
+    })))
   }
 
   async function createNewFamily() {
