@@ -238,10 +238,15 @@ export default function SettingsPage() {
       }
     }
 
-    await Promise.all([
-      supabase.from('family_members').update({ role: newRole }).eq('user_id', userId).eq('family_id', profile.family_id),
-      supabase.from('users').update({ role: newRole }).eq('id', userId),
-    ])
+    const { error } = await supabase
+      .from('family_members')
+      .update({ role: newRole })
+      .eq('user_id', userId)
+      .eq('family_id', profile.family_id)
+    if (error) {
+      alert('שגיאה בעדכון תפקיד: ' + error.message)
+      return
+    }
     setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
   }
 
