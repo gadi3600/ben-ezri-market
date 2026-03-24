@@ -1,6 +1,6 @@
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
-import { ShoppingCart, Store, History, Settings } from 'lucide-react'
+import { lazy, Suspense, useState, useEffect } from 'react'
+import { ShoppingCart, Store, History, Settings, Users, ChevronDown } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AuthPage        from './pages/AuthPage'
 import FamilySetupPage from './pages/FamilySetupPage'
@@ -33,8 +33,16 @@ const navItems = [
 // ── Inner app (needs AuthContext) ────────────────────────────────────────────
 
 function AppContent() {
-  const { session, profile, loading, activeFamilyName, families, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
+  const { session, profile, loading, activeFamilyId, activeFamilyName, families, switchFamily, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
   const location = useLocation()
+  const [showFamilyPicker, setShowFamilyPicker] = useState(false)
+
+  // Auto-show family picker on first login with multiple families (no saved preference)
+  useEffect(() => {
+    if (families.length > 1 && !localStorage.getItem('activeFamilyId')) {
+      setShowFamilyPicker(true)
+    }
+  }, [families.length])
 
   // Join page — accessible without login
   if (location.pathname === '/join') return <JoinPage />
@@ -69,6 +77,47 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
 
+      {/* ── Family Picker Modal ── */}
+      {showFamilyPicker && families.length > 1 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowFamilyPicker(false)} />
+          <div className="relative bg-white rounded-3xl shadow-2xl w-[85%] max-w-sm p-6">
+            <div className="text-center mb-5">
+              <div className="bg-primary-100 rounded-full p-3 inline-flex mb-3">
+                <Users className="w-8 h-8 text-primary-600" />
+              </div>
+              <h2 className="text-xl font-extrabold text-gray-800">בחר משפחה</h2>
+              <p className="text-sm text-gray-400 mt-1">לאיזו משפחה להיכנס?</p>
+            </div>
+            <div className="space-y-2">
+              {families.map(f => (
+                <button
+                  key={f.family_id}
+                  onClick={() => { switchFamily(f.family_id); setShowFamilyPicker(false) }}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-right
+                             transition-all duration-150 border-2
+                             ${f.family_id === activeFamilyId
+                               ? 'border-primary-400 bg-primary-50'
+                               : 'border-gray-100 hover:border-primary-200 hover:bg-gray-50'
+                             }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center
+                                  text-lg font-extrabold text-primary-700 flex-shrink-0">
+                    {f.family_name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-800">{f.family_name}</p>
+                    <p className="text-xs text-gray-400">
+                      {f.role === 'admin' ? 'מנהל' : f.role === 'member' ? 'חבר' : 'צופה'}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <header className="bg-gradient-to-l from-primary-600 to-primary-700 text-white shadow-md sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center gap-3">
@@ -79,21 +128,27 @@ function AppContent() {
             <h1 className="text-xl font-extrabold leading-tight tracking-tight">בן עזרי מרקט</h1>
             <p className="text-primary-100 text-xs font-medium truncate">
               שלום, {profile.full_name} 👋
-              {activeFamilyName && !viewingFamilyId && families.length > 1 && (
-                <span className="mr-1">· {activeFamilyName}</span>
-              )}
-              {viewingFamilyId && viewingFamilyName && (
-                <span className="mr-1">· צופה ב{viewingFamilyName}</span>
-              )}
             </p>
           </div>
-          {viewingFamilyId && (
+          {/* Family name button (when multiple families) */}
+          {families.length > 1 && !viewingFamilyId && activeFamilyName && (
+            <button
+              onClick={() => setShowFamilyPicker(true)}
+              className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
+                         px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 flex items-center gap-1"
+            >
+              {activeFamilyName}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          )}
+          {/* Superadmin viewing badge + back */}
+          {viewingFamilyId && viewingFamilyName && (
             <button
               onClick={() => setViewingFamily(null)}
-              className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
+              className="bg-amber-500/80 hover:bg-amber-500 text-white text-xs font-semibold
                          px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
             >
-              ← חזרה
+              {viewingFamilyName} ← חזרה
             </button>
           )}
         </div>
