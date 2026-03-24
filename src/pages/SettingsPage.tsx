@@ -123,30 +123,36 @@ export default function SettingsPage() {
   }
 
   async function loadFamilyData(familyId: string) {
+    // 1. Load family + membership rows
     const [{ data: fam }, { data: memberRows }] = await Promise.all([
       supabase.from('families').select('*').eq('id', familyId).single(),
-      supabase.from('family_members')
-        .select('role, user:users(id, full_name, avatar_url, created_at, updated_at)')
-        .eq('family_id', familyId),
+      supabase.from('family_members').select('user_id, role').eq('family_id', familyId),
     ])
     if (fam) setFamily(fam)
-    if (memberRows) {
-      const mems: UserProfile[] = memberRows.map((r: { role: string; user: unknown }) => {
-        const u = Array.isArray(r.user) ? r.user[0] : r.user
-        const user = u as { id: string; full_name: string; avatar_url: string | null; created_at: string; updated_at: string } | null
-        return {
-          id: user?.id ?? '',
-          family_id: familyId,
-          full_name: user?.full_name ?? '',
-          avatar_url: user?.avatar_url ?? null,
-          role: r.role as 'admin' | 'member' | 'viewer',
-          is_superadmin: false,
-          created_at: user?.created_at ?? '',
-          updated_at: user?.updated_at ?? '',
-        }
-      }).filter(m => m.id)
-      setMembers(mems)
-    }
+    if (!memberRows?.length) { setMembers([]); return }
+
+    // 2. Load user details for all member user_ids
+    const userIds = memberRows.map(r => r.user_id)
+    const { data: userData } = await supabase
+      .from('users')
+      .select('id, full_name, avatar_url, created_at, updated_at')
+      .in('id', userIds)
+
+    const userMap = new Map((userData ?? []).map(u => [u.id, u]))
+    const mems: UserProfile[] = memberRows.map(r => {
+      const u = userMap.get(r.user_id)
+      return {
+        id: r.user_id,
+        family_id: familyId,
+        full_name: u?.full_name ?? '',
+        avatar_url: u?.avatar_url ?? null,
+        role: r.role as 'admin' | 'member' | 'viewer',
+        is_superadmin: false,
+        created_at: u?.created_at ?? '',
+        updated_at: u?.updated_at ?? '',
+      }
+    }).filter(m => m.full_name)
+    setMembers(mems)
   }
 
   async function loadInvites(familyId: string) {
