@@ -52,8 +52,18 @@ function AppContent() {
   // Not logged in
   if (!session) return <AuthPage />
 
+  // Wait for profile to load before deciding
+  if (!profile) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-primary-600 to-primary-700">
+      <div className="bg-white/20 rounded-3xl p-5 mb-5">
+        <ShoppingCart className="w-12 h-12 text-white" />
+      </div>
+      <div className="w-8 h-8 border-4 border-white/40 border-t-white rounded-full animate-spin" />
+    </div>
+  )
+
   // Logged in but no family yet (superadmin can skip)
-  if (!profile?.family_id && !profile?.is_superadmin) return <FamilySetupPage />
+  if (!profile.family_id && !profile.is_superadmin) return <FamilySetupPage />
 
   // Full app
   return (
