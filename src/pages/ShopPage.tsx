@@ -491,9 +491,11 @@ export default function ShopPage() {
 
   async function loadAll() {
     setLoading(true)
+    console.time('⏱ ShopPage total')
 
     // Run ALL queries in parallel (stores + list + order data)
-    const [{ data: storeData }, { data: listData }, { data: orderData }] = await Promise.all([
+    console.time('⏱ batch1: stores+list+order')
+    const [storeRes, listRes, orderRes] = await Promise.all([
       supabase.from('stores').select('*').eq('is_active', true).order('name'),
       supabase
         .from('shopping_lists').select('*')
@@ -508,6 +510,14 @@ export default function ShopPage() {
         .eq('family_id', profile!.family_id)
         .in('type', ['customOrder', 'catOverrides', 'catOrder']),
     ])
+    console.timeEnd('⏱ batch1: stores+list+order')
+
+    const storeData = storeRes.data
+    const listData = listRes.data
+    const orderData = orderRes.data
+    if (storeRes.error) console.error('⏱ stores error:', storeRes.error.message)
+    if (listRes.error) console.error('⏱ list error:', listRes.error.message)
+    if (orderRes.error) console.error('⏱ order error:', orderRes.error.message)
 
     if (storeData) setStores(storeData)
 
@@ -523,7 +533,8 @@ export default function ShopPage() {
       setList(listData)
 
       // Load items + categories in parallel
-      const [{ data: itemData }, { data: catData }] = await Promise.all([
+      console.time('⏱ batch2: items+categories')
+      const [itemRes, catRes] = await Promise.all([
         supabase
           .from('list_items')
           .select('*, added_by_user:users!added_by(id, full_name)')
@@ -534,6 +545,13 @@ export default function ShopPage() {
           .select('name, category')
           .eq('family_id', profile!.family_id),
       ])
+      console.timeEnd('⏱ batch2: items+categories')
+
+      const itemData = itemRes.data
+      const catData = catRes.data
+      if (itemRes.error) console.error('⏱ items error:', itemRes.error.message)
+      if (catRes.error) console.error('⏱ categories error:', catRes.error.message)
+      console.log(`⏱ loaded: ${(itemData ?? []).length} items, ${(catData ?? []).length} categories`)
 
       setItems((itemData as ListItemWithUser[]) ?? [])
 
@@ -566,6 +584,7 @@ export default function ShopPage() {
       }
     }
 
+    console.timeEnd('⏱ ShopPage total')
     setLoading(false)
   }
 
