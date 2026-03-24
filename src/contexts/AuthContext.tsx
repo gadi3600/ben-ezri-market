@@ -78,10 +78,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ])
     if (profileData) setProfile(profileData)
 
-    // Fallback: if family_members is empty but user has family_id, use that
     let finalMemberships = memberships
-    if (memberships.length === 0 && profileData?.family_id) {
-      console.log('fetchMemberships: fallback to profile.family_id')
+
+    // Superadmin: load ALL families so they can switch to any
+    if (profileData?.is_superadmin) {
+      const { data: allFams } = await supabase
+        .from('families')
+        .select('id, name')
+        .order('name')
+      if (allFams && allFams.length > 0) {
+        const memberMap = new Map(memberships.map(m => [m.family_id, m]))
+        finalMemberships = allFams.map(f => ({
+          id: memberMap.get(f.id)?.id ?? `sa-${f.id}`,
+          family_id: f.id,
+          role: (memberMap.get(f.id)?.role ?? 'admin') as 'admin' | 'member' | 'viewer',
+          family_name: f.name ?? 'משפחה',
+        }))
+      }
+    }
+
+    // Fallback: if still empty but user has family_id, use that
+    if (finalMemberships.length === 0 && profileData?.family_id) {
       const { data: fam } = await supabase
         .from('families')
         .select('name')
@@ -94,12 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         family_name: fam?.name ?? 'משפחה',
       }]
     }
+
     setFamilies(finalMemberships)
 
     // Set active family: saved preference → first membership → profile.family_id
     const saved = localStorage.getItem('activeFamilyId')
-    const validSaved = saved && memberships.some(m => m.family_id === saved) ? saved : null
-    const defaultFamily = memberships[0]?.family_id ?? profileData?.family_id ?? null
+    const validSaved = saved && finalMemberships.some(m => m.family_id === saved) ? saved : null
+    const defaultFamily = finalMemberships[0]?.family_id ?? profileData?.family_id ?? null
     setActiveFamilyId(validSaved ?? defaultFamily)
   }
 

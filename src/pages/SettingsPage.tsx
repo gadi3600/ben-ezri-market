@@ -216,13 +216,13 @@ export default function SettingsPage() {
   async function loadAllFamilies() {
     const { data } = await supabase
       .from('families')
-      .select('id, name, users(count)')
+      .select('id, name, family_members(count)')
       .order('name')
     if (data) {
-      setAllFamilies(data.map((f: { id: string; name: string; users: { count: number }[] }) => ({
+      setAllFamilies(data.map((f: { id: string; name: string; family_members: { count: number }[] }) => ({
         id: f.id,
         name: f.name ?? 'ללא שם',
-        member_count: f.users?.[0]?.count ?? 0,
+        member_count: f.family_members?.[0]?.count ?? 0,
       })))
     }
   }
