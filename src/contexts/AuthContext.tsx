@@ -35,22 +35,16 @@ async function fetchProfile(userId: string, retries = 4): Promise<UserProfile | 
   return null
 }
 
-async function fetchMemberships(userId: string): Promise<FamilyMembership[]> {
-  const { data, error } = await supabase
-    .from('family_members')
-    .select('id, family_id, role, families(name)')
-    .eq('user_id', userId)
-  console.log('fetchMemberships:', { userId, count: data?.length ?? 0, error: error?.message ?? null, data })
-  if (!data) return []
-  return data.map((row: { id: string; family_id: string; role: string; families: unknown }) => {
-    const fam = Array.isArray(row.families) ? row.families[0] : row.families
-    return {
-      id: row.id,
-      family_id: row.family_id,
-      role: row.role as 'admin' | 'member' | 'viewer',
-      family_name: (fam as { name: string } | null)?.name ?? 'משפחה',
-    }
-  })
+async function fetchMemberships(): Promise<FamilyMembership[]> {
+  // Use RPC (SECURITY DEFINER) to bypass RLS
+  const { data, error } = await supabase.rpc('get_my_families')
+  if (error || !data) return []
+  return (data as { id: string; family_id: string; role: string; family_name: string }[]).map(row => ({
+    id: row.id,
+    family_id: row.family_id,
+    role: row.role as 'admin' | 'member' | 'viewer',
+    family_name: row.family_name,
+  }))
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -80,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function loadProfile(userId: string) {
     const [profileData, memberships] = await Promise.all([
       fetchProfile(userId),
-      fetchMemberships(userId),
+      fetchMemberships(),
     ])
     if (profileData) setProfile(profileData)
 
@@ -100,7 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         family_name: fam?.name ?? 'משפחה',
       }]
     }
-    console.log('loadProfile: finalMemberships =', finalMemberships, 'activeFamilyId will be =', localStorage.getItem('activeFamilyId') ?? finalMemberships[0]?.family_id ?? 'none')
     setFamilies(finalMemberships)
 
     // Set active family: saved preference → first membership → profile.family_id
