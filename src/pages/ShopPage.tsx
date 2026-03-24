@@ -492,7 +492,8 @@ export default function ShopPage() {
   async function loadAll() {
     setLoading(true)
 
-    const [{ data: storeData }, { data: listData }] = await Promise.all([
+    // Run ALL queries in parallel (stores + list + order data)
+    const [{ data: storeData }, { data: listData }, { data: orderData }] = await Promise.all([
       supabase.from('stores').select('*').eq('is_active', true).order('name'),
       supabase
         .from('shopping_lists').select('*')
@@ -501,25 +502,52 @@ export default function ShopPage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('shopping_order')
+        .select('type, order_data')
+        .eq('family_id', profile!.family_id)
+        .in('type', ['customOrder', 'catOverrides', 'catOrder']),
     ])
 
     if (storeData) setStores(storeData)
 
+    // Apply order data
+    for (const row of orderData ?? []) {
+      if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
+      if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
+      if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
+    }
+    setTimeout(() => { orderLoadedRef.current = true }, 100)
+
     if (listData) {
       setList(listData)
-      const { data: itemData } = await supabase
-        .from('list_items')
-        .select('*, added_by_user:users!added_by(id, full_name)')
-        .eq('list_id', listData.id)
-        .order('sort_order', { ascending: true })
-      const loadedItems = (itemData as ListItemWithUser[]) ?? []
-      setItems(loadedItems)
 
-      // Only reset doneState if this is a different list than what was completed
+      // Load items + categories in parallel
+      const [{ data: itemData }, { data: catData }] = await Promise.all([
+        supabase
+          .from('list_items')
+          .select('*, added_by_user:users!added_by(id, full_name)')
+          .eq('list_id', listData.id)
+          .order('sort_order', { ascending: true }),
+        supabase
+          .from('item_categories')
+          .select('name, category')
+          .eq('family_id', profile!.family_id),
+      ])
+
+      setItems((itemData as ListItemWithUser[]) ?? [])
+
+      // Apply saved categories
+      if (catData) {
+        const map: Record<string, string> = {}
+        for (const r of catData) map[r.name] = r.category
+        setSavedCats(map)
+      }
+
+      // doneState logic
       const savedDone = localStorage.getItem('shopDoneState')
       const savedListId = localStorage.getItem('shopCompletedListId')
       if (savedDone && savedListId !== listData.id) {
-        // New list — clear old completion state
         localStorage.removeItem('shopDoneState')
         localStorage.removeItem('shopDeferredCount')
         localStorage.removeItem('shopCompletedListId')
@@ -531,7 +559,6 @@ export default function ShopPage() {
         if (found) setSelectedStore(found)
         setShowPicker(false)
       } else {
-        // Only show picker if no store selected and not completed
         const currentDone = localStorage.getItem('shopDoneState')
         if (!currentDone || currentDone === 'idle') {
           setShowPicker(true)
@@ -706,49 +733,13 @@ export default function ShopPage() {
   // ── saved categories from DB (name → category) ──
   const [savedCats, setSavedCats] = useState<Record<string, string>>({})
 
-  // Load saved categories from DB when items load
-  useEffect(() => {
-    if (!profile?.family_id || active.length === 0) return
-    const names = [...new Set(active.map(i => i.name))]
-    supabase
-      .from('item_categories')
-      .select('name, category')
-      .eq('family_id', profile.family_id)
-      .in('name', names)
-      .then(({ data }) => {
-        if (data) {
-          const map: Record<string, string> = {}
-          for (const r of data) map[r.name] = r.category
-          setSavedCats(map)
-        }
-      })
-  }, [active.length, profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── custom sort order + category overrides (synced to DB) ──
+  // Loaded in loadAll(), not separate useEffects
   const [customOrder, setCustomOrder] = useState<string[]>([])
   const [catOverrides, setCatOverrides] = useState<Record<string, string>>({})
   const orderLoadedRef = useRef(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipRealtimeRef = useRef(false)
-
-  // Load order data from DB (once)
-  useEffect(() => {
-    if (!profile?.family_id) return
-    supabase
-      .from('shopping_order')
-      .select('type, order_data')
-      .eq('family_id', profile.family_id)
-      .in('type', ['customOrder', 'catOverrides', 'catOrder'])
-      .then(({ data }) => {
-        for (const row of data ?? []) {
-          if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
-          if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
-          if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
-        }
-        // Mark loaded after state is set (next tick)
-        setTimeout(() => { orderLoadedRef.current = true }, 100)
-      })
-  }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced save — batches all changes into one save per type
   function saveOrderToDB(type: string, orderData: unknown) {
