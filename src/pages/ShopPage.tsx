@@ -757,22 +757,24 @@ export default function ShopPage() {
   const [customOrder, setCustomOrder] = useState<string[]>([])
   const [catOverrides, setCatOverrides] = useState<Record<string, string>>({})
   const orderLoadedRef = useRef(false)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipRealtimeRef = useRef(false)
 
   // Debounced save — batches all changes into one save per type
+  // Per-type debounce timers so concurrent saves don't cancel each other
+  const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
   function saveOrderToDB(type: string, orderData: unknown) {
     if (!profile?.family_id || !orderLoadedRef.current) return
-    // Debounce: wait 300ms before saving (batches rapid changes)
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
+    if (saveTimersRef.current[type]) clearTimeout(saveTimersRef.current[type])
+    saveTimersRef.current[type] = setTimeout(() => {
       skipRealtimeRef.current = true
       supabase.from('shopping_order').upsert({
         family_id:  profile.family_id,
         type,
         order_data: orderData,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'family_id,type' }).then(() => {
+      }, { onConflict: 'family_id,type' }).then(({ error }) => {
+        if (error) console.error(`⏱ saveOrderToDB(${type}) error:`, error.message)
         setTimeout(() => { skipRealtimeRef.current = false }, 1000)
       })
     }, 300)
