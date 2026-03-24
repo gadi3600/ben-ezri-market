@@ -142,12 +142,12 @@ function AppContent() {
                       : 'bg-white/20 hover:bg-white/30 text-white'
                   }`}
                 >
-                  {viewingFamilyName ?? activeFamilyName}
+                  משפחת {viewingFamilyName ?? activeFamilyName}
                   <ChevronDown className="w-3 h-3" />
                 </button>
               ) : (
                 <span className="text-xs font-semibold text-primary-100 px-3 py-1.5">
-                  {activeFamilyName}
+                  משפחת {activeFamilyName}
                 </span>
               )}
               {viewingFamilyId && (
