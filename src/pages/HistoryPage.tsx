@@ -325,7 +325,7 @@ export default function HistoryPage() {
 
   async function loadStores() {
     const { data } = await supabase
-      .from('stores').select('id, name').eq('is_active', true).order('name')
+      .from('stores').select('id, name').eq('is_active', true).eq('family_id', profile!.family_id).order('name')
     if (data) setStores(data as StoreOption[])
   }
 

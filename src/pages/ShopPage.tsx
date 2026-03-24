@@ -37,10 +37,12 @@ function storeVisual(name: string) {
 
 function StorePickerModal({
   stores,
+  familyId,
   onSelect,
   onSkip,
 }: {
   stores: Store[]
+  familyId: string
   onSelect: (store: Store) => Promise<void>
   onSkip: () => void
 }) {
@@ -61,7 +63,7 @@ function StorePickerModal({
     try {
       const { data, error } = await supabase
         .from('stores')
-        .insert({ name: newName.trim() })
+        .insert({ name: newName.trim(), family_id: familyId })
         .select()
         .single()
       if (error) throw error
@@ -496,7 +498,7 @@ export default function ShopPage() {
     // Run ALL queries in parallel (stores + list + order data)
     console.time('⏱ batch1: stores+list+order')
     const [storeRes, listRes, orderRes] = await Promise.all([
-      supabase.from('stores').select('*').eq('is_active', true).order('name'),
+      supabase.from('stores').select('*').eq('is_active', true).eq('family_id', profile!.family_id).order('name'),
       supabase
         .from('shopping_lists').select('*')
         .eq('family_id', profile!.family_id)
@@ -1060,6 +1062,7 @@ export default function ShopPage() {
       {showPicker && (
         <StorePickerModal
           stores={stores}
+          familyId={profile!.family_id!}
           onSelect={handleSelectStore}
           onSkip={() => setShowPicker(false)}
         />

@@ -283,7 +283,7 @@ export default function SettingsPage() {
 
   async function loadStores() {
     const { data } = await supabase
-      .from('stores').select('*').eq('is_active', true).order('name')
+      .from('stores').select('*').eq('is_active', true).eq('family_id', profile!.family_id).order('name')
     if (data) setStores(data)
   }
 
@@ -293,7 +293,7 @@ export default function SettingsPage() {
     setStoreError(null)
     const { data, error } = await supabase
       .from('stores')
-      .insert({ name: newStoreName.trim(), is_active: true })
+      .insert({ name: newStoreName.trim(), is_active: true, family_id: profile!.family_id })
       .select()
       .single()
     if (error) {
