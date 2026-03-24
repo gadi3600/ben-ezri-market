@@ -254,13 +254,31 @@ export default function SettingsPage() {
       .single()
     if (inv) {
       const link = `${window.location.origin}/join?token=${inv.id}&role=admin`
-      copyToClipboard(link)
-      alert(`משפחה נוצרה!\nלינק הזמנה למנהל הועתק:\n${link}`)
+      fallbackCopy(link)
+      alert(`משפחה נוצרה!\n\nלינק הזמנה למנהל:\n${link}\n\n(הלינק הועתק ללוח)`)
     }
     setNewFamilyName('')
     setNewFamilyEmail('')
     setCreatingFamily(false)
     loadAllFamilies()
+  }
+
+  async function createFamilyInviteLink(familyId: string, familyName: string) {
+    const { data: inv } = await supabase
+      .from('invites')
+      .insert({
+        email: `invite-${Date.now()}@pending.com`,
+        role: 'member' as Role,
+        family_id: familyId,
+        invited_by: profile!.id,
+      })
+      .select('id')
+      .single()
+    if (inv) {
+      const link = `${window.location.origin}/join?token=${inv.id}&role=member`
+      fallbackCopy(link)
+      alert(`לינק הזמנה ל${familyName}:\n${link}\n\n(הועתק ללוח)`)
+    }
   }
 
   async function loadStores() {
@@ -642,16 +660,24 @@ export default function SettingsPage() {
           </p>
           <div className="space-y-1.5 mb-4">
             {allFamilies.map(f => (
-              <button
-                key={f.id}
-                onClick={() => setViewingFamily(f.id, f.name)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-right
-                           hover:bg-primary-50 transition-colors"
-              >
-                <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
-                <span className="text-xs text-gray-400">{f.member_count} חברים</span>
-              </button>
+              <div key={f.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setViewingFamily(f.id, f.name)}
+                  className="flex-1 flex items-center gap-3 text-right"
+                >
+                  <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
+                  <span className="text-xs text-gray-400">{f.member_count} חברים</span>
+                </button>
+                <button
+                  onClick={() => createFamilyInviteLink(f.id, f.name)}
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500
+                             hover:bg-primary-50 transition-colors flex-shrink-0"
+                  title="צור לינק הזמנה"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
             ))}
           </div>
 
