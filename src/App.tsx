@@ -130,26 +130,30 @@ function AppContent() {
               שלום, {profile.full_name} 👋
             </p>
           </div>
-          {/* Family name button (multiple families or superadmin) */}
-          {(families.length > 1 || profile.is_superadmin) && !viewingFamilyId && activeFamilyName && (
-            <button
-              onClick={() => setShowFamilyPicker(true)}
-              className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
-                         px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 flex items-center gap-1"
-            >
-              {activeFamilyName}
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          )}
-          {/* Superadmin viewing badge + back */}
-          {viewingFamilyId && viewingFamilyName && (
-            <button
-              onClick={() => setViewingFamily(null)}
-              className="bg-amber-500/80 hover:bg-amber-500 text-white text-xs font-semibold
-                         px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
-            >
-              {viewingFamilyName} ← חזרה
-            </button>
+          {/* Family switcher button */}
+          {(families.length > 1 || profile.is_superadmin) && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                onClick={() => setShowFamilyPicker(true)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1 ${
+                  viewingFamilyId
+                    ? 'bg-amber-500/80 hover:bg-amber-500 text-white'
+                    : 'bg-white/20 hover:bg-white/30 text-white'
+                }`}
+              >
+                {viewingFamilyName ?? activeFamilyName ?? 'בחר משפחה'}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {viewingFamilyId && (
+                <button
+                  onClick={() => setViewingFamily(null)}
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
+                             px-2 py-1.5 rounded-xl transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           )}
         </div>
       </header>

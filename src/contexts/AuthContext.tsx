@@ -83,7 +83,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetchMemberships(userId),
     ])
     if (profileData) setProfile(profileData)
-    setFamilies(memberships)
+
+    // Fallback: if family_members is empty but user has family_id, use that
+    let finalMemberships = memberships
+    if (memberships.length === 0 && profileData?.family_id) {
+      console.log('fetchMemberships: fallback to profile.family_id')
+      const { data: fam } = await supabase
+        .from('families')
+        .select('name')
+        .eq('id', profileData.family_id)
+        .maybeSingle()
+      finalMemberships = [{
+        id: 'fallback',
+        family_id: profileData.family_id,
+        role: profileData.role ?? 'member',
+        family_name: fam?.name ?? 'משפחה',
+      }]
+    }
+    setFamilies(finalMemberships)
 
     // Set active family: saved preference → first membership → profile.family_id
     const saved = localStorage.getItem('activeFamilyId')
