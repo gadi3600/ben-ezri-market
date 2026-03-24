@@ -214,10 +214,28 @@ export default function SettingsPage() {
 
   // ── Superadmin functions ──
   async function loadAllFamilies() {
-    const { data } = await supabase
+    // Try with member count, fallback to without
+    const { data, error } = await supabase
       .from('families')
       .select('id, name, family_members(count)')
       .order('name')
+
+    if (error) {
+      // Fallback: load without join
+      const { data: simple } = await supabase
+        .from('families')
+        .select('id, name')
+        .order('name')
+      if (simple) {
+        setAllFamilies(simple.map((f: { id: string; name: string }) => ({
+          id: f.id,
+          name: f.name ?? 'ללא שם',
+          member_count: 0,
+        })))
+      }
+      return
+    }
+
     if (data) {
       setAllFamilies(data.map((f: { id: string; name: string; family_members: { count: number }[] }) => ({
         id: f.id,
