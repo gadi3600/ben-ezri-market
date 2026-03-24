@@ -36,10 +36,11 @@ async function fetchProfile(userId: string, retries = 4): Promise<UserProfile | 
 }
 
 async function fetchMemberships(userId: string): Promise<FamilyMembership[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('family_members')
     .select('id, family_id, role, families(name)')
     .eq('user_id', userId)
+  console.log('fetchMemberships:', { userId, count: data?.length ?? 0, error: error?.message ?? null })
   if (!data) return []
   return data.map((row: { id: string; family_id: string; role: string; families: unknown }) => {
     const fam = Array.isArray(row.families) ? row.families[0] : row.families
