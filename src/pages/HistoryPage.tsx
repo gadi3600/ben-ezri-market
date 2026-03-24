@@ -54,10 +54,12 @@ function storeVisual(name: string | null) {
 
 function ReceiptLightbox({
   receipts,
+  canDelete,
   onClose,
   onDelete,
 }: {
   receipts: LightboxReceipt[]
+  canDelete: boolean
   onClose: () => void
   onDelete: (ids: string[]) => Promise<void>
 }) {
@@ -101,14 +103,16 @@ function ReceiptLightbox({
             <X className="w-5 h-5" />
           </button>
           <span className="text-sm font-semibold">{receipts.length} תמונות</span>
-          <button
-            onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }}
-            className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors ${
-              selectMode ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
-            }`}
-          >
-            {selectMode ? 'ביטול' : 'בחר'}
-          </button>
+          {canDelete ? (
+            <button
+              onClick={() => { setSelectMode(s => !s); setSelected(new Set()) }}
+              className={`text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors ${
+                selectMode ? 'bg-white/20 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {selectMode ? 'ביטול' : 'בחר'}
+            </button>
+          ) : <div />}
         </div>
 
         {/* Thumbnails grid */}
@@ -152,7 +156,7 @@ function ReceiptLightbox({
         </div>
 
         {/* Bulk delete bar */}
-        {selectMode && selected.size > 0 && (
+        {canDelete && selectMode && selected.size > 0 && (
           <div className="flex-shrink-0 p-4 bg-black/40">
             <button
               onClick={() => doDelete([...selected])}
@@ -188,6 +192,7 @@ function ReceiptLightbox({
         {receipts.length > 1 && (
           <span className="text-sm font-semibold">{safeIdx + 1} / {receipts.length}</span>
         )}
+        {canDelete ? (
         <button
           onClick={() => doDelete([current.id])}
           disabled={deleting}
@@ -199,6 +204,7 @@ function ReceiptLightbox({
             : <Trash2 className="w-5 h-5" />
           }
         </button>
+        ) : <div />}
       </div>
 
       {/* Image — key forces re-render on receipt change (fixes stale display) */}
@@ -400,6 +406,7 @@ export default function HistoryPage() {
       {lightboxReceipts && (
         <ReceiptLightbox
           receipts={lightboxReceipts}
+          canDelete={isAdmin(profile!.role)}
           onClose={() => setLightboxReceipts(null)}
           onDelete={handleDeleteReceipts}
         />
@@ -539,6 +546,7 @@ export default function HistoryPage() {
                       {amount && (
                         <span className="text-lg font-extrabold text-gray-800">{amount}</span>
                       )}
+                      {(purchase.purchased_by === profile!.id || isAdmin(profile!.role)) && (
                       <button
                         onClick={() => {
                           setEditAmount(purchase.total_amount != null ? String(purchase.total_amount) : '')
@@ -550,6 +558,7 @@ export default function HistoryPage() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      )}
                     </>
                   )}
                 </div>
