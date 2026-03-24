@@ -123,12 +123,30 @@ export default function SettingsPage() {
   }
 
   async function loadFamilyData(familyId: string) {
-    const [{ data: fam }, { data: mems }] = await Promise.all([
+    const [{ data: fam }, { data: memberRows }] = await Promise.all([
       supabase.from('families').select('*').eq('id', familyId).single(),
-      supabase.from('users').select('*').eq('family_id', familyId).order('created_at'),
+      supabase.from('family_members')
+        .select('role, user:users(id, full_name, avatar_url, created_at, updated_at)')
+        .eq('family_id', familyId),
     ])
-    if (fam)  setFamily(fam)
-    if (mems) setMembers(mems)
+    if (fam) setFamily(fam)
+    if (memberRows) {
+      const mems: UserProfile[] = memberRows.map((r: { role: string; user: unknown }) => {
+        const u = Array.isArray(r.user) ? r.user[0] : r.user
+        const user = u as { id: string; full_name: string; avatar_url: string | null; created_at: string; updated_at: string } | null
+        return {
+          id: user?.id ?? '',
+          family_id: familyId,
+          full_name: user?.full_name ?? '',
+          avatar_url: user?.avatar_url ?? null,
+          role: r.role as 'admin' | 'member' | 'viewer',
+          is_superadmin: false,
+          created_at: user?.created_at ?? '',
+          updated_at: user?.updated_at ?? '',
+        }
+      }).filter(m => m.id)
+      setMembers(mems)
+    }
   }
 
   async function loadInvites(familyId: string) {
