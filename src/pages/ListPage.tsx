@@ -307,7 +307,7 @@ const ItemRow = memo(function ItemRow({
 
         {/* Name + added by */}
         <button
-          onClick={e => { e.stopPropagation(); if (!selectMode && adminMode) onEdit(item) }}
+          onClick={e => { e.stopPropagation(); if (!selectMode && !readOnly) onEdit(item) }}
           className="flex-1 min-w-0 text-right"
         >
           <span className="text-base font-medium leading-tight block truncate text-gray-800">
@@ -864,7 +864,7 @@ export default function ListPage() {
       )}
 
       {/* ── Autocomplete suggestions (above input bar, admin only) ── */}
-      {isAdmin(profile!.role) && suggestions.length > 0 && (
+      {canEdit(profile!.role) && suggestions.length > 0 && (
         <div className="fixed bottom-[136px] inset-x-0 px-4 z-50">
           <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
             {suggestions.map(s => (
@@ -886,8 +886,8 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* ── Hidden file inputs + add bar (admin only) ── */}
-      {isAdmin(profile!.role) && (<>
+      {/* ── Hidden file inputs + add bar (editors: admin + member) ── */}
+      {canEdit(profile!.role) && (<>
       {/* Hidden file inputs */}
       <input
         ref={cameraInputRef}
