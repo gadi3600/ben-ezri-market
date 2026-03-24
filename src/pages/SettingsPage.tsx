@@ -62,6 +62,12 @@ export default function SettingsPage() {
   const [newFamilyEmail, setNewFamilyEmail] = useState('')
   const [creatingFamily, setCreatingFamily] = useState(false)
 
+  // Add existing user to family (superadmin)
+  const [userSearch, setUserSearch] = useState('')
+  const [userResults, setUserResults] = useState<{ id: string; full_name: string }[]>([])
+  const [addUserRole, setAddUserRole] = useState<Role>('member')
+  const [addingUser, setAddingUser] = useState(false)
+
   useEffect(() => {
     if (!profile) return
     setEditName(profile.full_name)
@@ -263,6 +269,48 @@ export default function SettingsPage() {
     if (!confirm(`להסיר את ${name} מהמשפחה?`)) return
     await supabase.from('family_members').delete().eq('user_id', userId).eq('family_id', profile.family_id)
     setMembers(prev => prev.filter(m => m.id !== userId))
+  }
+
+  // ── Add existing user to family (superadmin) ──
+  async function searchUsers(query: string) {
+    setUserSearch(query)
+    if (query.trim().length < 2) { setUserResults([]); return }
+    const { data } = await supabase
+      .from('users')
+      .select('id, full_name')
+      .ilike('full_name', `%${query.trim()}%`)
+      .limit(10)
+    // Filter out users already in this family
+    const memberIds = new Set(members.map(m => m.id))
+    setUserResults((data ?? []).filter(u => !memberIds.has(u.id)))
+  }
+
+  async function addExistingUser(userId: string, userName: string) {
+    if (!profile?.family_id || addingUser) return
+    setAddingUser(true)
+    const { error } = await supabase.from('family_members').insert({
+      user_id: userId,
+      family_id: profile.family_id,
+      role: addUserRole,
+    })
+    if (error) {
+      alert(error.message.includes('duplicate') ? 'המשתמש כבר שייך למשפחה' : error.message)
+    } else {
+      // Add to local state
+      setMembers(prev => [...prev, {
+        id: userId,
+        family_id: profile.family_id!,
+        full_name: userName,
+        avatar_url: null,
+        role: addUserRole,
+        is_superadmin: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }])
+      setUserSearch('')
+      setUserResults([])
+    }
+    setAddingUser(false)
   }
 
   // ── Superadmin functions ──
@@ -543,6 +591,55 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+
+          {/* ── Add existing user (superadmin only) ── */}
+          {profile?.is_superadmin && (
+            <div className="mt-5 pt-5 border-t border-gray-100">
+              <p className="text-sm font-semibold text-gray-600 mb-2">הוסף משתמש קיים למשפחה</p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={e => searchUsers(e.target.value)}
+                  placeholder="חפש לפי שם..."
+                  className="input flex-1 text-sm"
+                />
+                <select
+                  value={addUserRole}
+                  onChange={e => setAddUserRole(e.target.value as Role)}
+                  className="text-sm border-2 border-gray-200 rounded-xl px-3 py-2 bg-white
+                             focus:outline-none focus:ring-0 focus:border-primary-400"
+                >
+                  <option value="admin">מנהל</option>
+                  <option value="member">חבר</option>
+                  <option value="viewer">צופה</option>
+                </select>
+              </div>
+              {userResults.length > 0 && (
+                <div className="bg-gray-50 rounded-xl overflow-hidden mb-2">
+                  {userResults.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => addExistingUser(u.id, u.full_name)}
+                      disabled={addingUser}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right
+                                 hover:bg-primary-50 transition-colors border-b border-gray-100 last:border-0"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center
+                                      text-xs font-extrabold text-primary-700 flex-shrink-0">
+                        {u.full_name.charAt(0)}
+                      </div>
+                      <span className="flex-1 font-medium text-gray-700">{u.full_name}</span>
+                      <Plus className="w-4 h-4 text-primary-500 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userSearch.trim().length >= 2 && userResults.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-2">לא נמצאו משתמשים</p>
+              )}
+            </div>
+          )}
 
           {/* ── Invite user (admin only) ── */}
           {isAdmin(profile!.role) && (
