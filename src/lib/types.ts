@@ -11,6 +11,7 @@ export interface UserProfile {
   full_name: string
   avatar_url: string | null
   role: 'admin' | 'member' | 'viewer'
+  is_superadmin: boolean
   created_at: string
   updated_at: string
 }

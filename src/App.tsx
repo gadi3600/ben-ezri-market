@@ -33,7 +33,7 @@ const navItems = [
 // ── Inner app (needs AuthContext) ────────────────────────────────────────────
 
 function AppContent() {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, viewingFamilyId, viewingFamilyName, setViewingFamily } = useAuth()
   const location = useLocation()
 
   // Join page — accessible without login
@@ -52,8 +52,8 @@ function AppContent() {
   // Not logged in
   if (!session) return <AuthPage />
 
-  // Logged in but no family yet
-  if (!profile?.family_id) return <FamilySetupPage />
+  // Logged in but no family yet (superadmin can skip)
+  if (!profile?.family_id && !profile?.is_superadmin) return <FamilySetupPage />
 
   // Full app
   return (
@@ -69,8 +69,20 @@ function AppContent() {
             <h1 className="text-xl font-extrabold leading-tight tracking-tight">בן עזרי מרקט</h1>
             <p className="text-primary-100 text-xs font-medium truncate">
               שלום, {profile.full_name} 👋
+              {viewingFamilyId && viewingFamilyName && (
+                <span className="mr-2">· צופה ב{viewingFamilyName}</span>
+              )}
             </p>
           </div>
+          {viewingFamilyId && (
+            <button
+              onClick={() => setViewingFamily(null)}
+              className="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold
+                         px-3 py-1.5 rounded-xl transition-colors flex-shrink-0"
+            >
+              ← חזרה
+            </button>
+          )}
         </div>
       </header>
 

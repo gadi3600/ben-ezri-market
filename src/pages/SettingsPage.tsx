@@ -27,7 +27,7 @@ function Section({ icon, title, children }: { icon: ReactNode; title: string; ch
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { profile, refreshProfile, signOut } = useAuth()
+  const { profile, refreshProfile, signOut, setViewingFamily } = useAuth()
   const [family, setFamily]   = useState<Family | null>(null)
   const [members, setMembers] = useState<UserProfile[]>([])
   const [stores, setStores]   = useState<Store[]>([])
@@ -56,6 +56,12 @@ export default function SettingsPage() {
   const [inviting, setInviting]           = useState(false)
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
 
+  // Superadmin
+  const [allFamilies, setAllFamilies] = useState<{ id: string; name: string; member_count: number }[]>([])
+  const [newFamilyName, setNewFamilyName] = useState('')
+  const [newFamilyEmail, setNewFamilyEmail] = useState('')
+  const [creatingFamily, setCreatingFamily] = useState(false)
+
   useEffect(() => {
     if (!profile) return
     setEditName(profile.full_name)
@@ -65,6 +71,7 @@ export default function SettingsPage() {
     }
     loadStores()
     checkPushStatus()
+    if (profile.is_superadmin) loadAllFamilies()
   }, [profile?.id, profile?.family_id, profile?.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkPushStatus() {
@@ -203,6 +210,57 @@ export default function SettingsPage() {
     if (!confirm(`להסיר את ${name} מהמשפחה?`)) return
     await supabase.from('users').update({ family_id: null, role: 'member' }).eq('id', userId)
     setMembers(prev => prev.filter(m => m.id !== userId))
+  }
+
+  // ── Superadmin functions ──
+  async function loadAllFamilies() {
+    const { data } = await supabase
+      .from('families')
+      .select('id, name, users(count)')
+      .order('name')
+    if (data) {
+      setAllFamilies(data.map((f: { id: string; name: string; users: { count: number }[] }) => ({
+        id: f.id,
+        name: f.name ?? 'ללא שם',
+        member_count: f.users?.[0]?.count ?? 0,
+      })))
+    }
+  }
+
+  async function createNewFamily() {
+    if (!newFamilyName.trim() || !newFamilyEmail.trim() || creatingFamily) return
+    setCreatingFamily(true)
+    // Create family
+    const { data: fam, error: famErr } = await supabase
+      .from('families')
+      .insert({ name: newFamilyName.trim() })
+      .select('id')
+      .single()
+    if (famErr || !fam) {
+      alert('שגיאה ביצירת משפחה: ' + (famErr?.message ?? ''))
+      setCreatingFamily(false)
+      return
+    }
+    // Create invite for the admin
+    const { data: inv } = await supabase
+      .from('invites')
+      .insert({
+        email: newFamilyEmail.trim().toLowerCase(),
+        role: 'admin',
+        family_id: fam.id,
+        invited_by: profile!.id,
+      })
+      .select('id')
+      .single()
+    if (inv) {
+      const link = `${window.location.origin}/join?token=${inv.id}&role=admin`
+      copyToClipboard(link)
+      alert(`משפחה נוצרה!\nלינק הזמנה למנהל הועתק:\n${link}`)
+    }
+    setNewFamilyName('')
+    setNewFamilyEmail('')
+    setCreatingFamily(false)
+    loadAllFamilies()
   }
 
   async function loadStores() {
@@ -569,6 +627,61 @@ export default function SettingsPage() {
           </p>
         )}
       </Section>
+      )}
+
+      {/* ── Superadmin: System Management ── */}
+      {profile?.is_superadmin && (
+        <Section icon={<Crown className="w-5 h-5 text-amber-500" />} title="ניהול מערכת">
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2 mb-4">
+            🔑 סופר-אדמין — ניהול כל המשפחות
+          </p>
+
+          {/* All families */}
+          <p className="text-sm font-semibold text-gray-600 mb-2">
+            משפחות ({allFamilies.length})
+          </p>
+          <div className="space-y-1.5 mb-4">
+            {allFamilies.map(f => (
+              <button
+                key={f.id}
+                onClick={() => setViewingFamily(f.id, f.name)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-right
+                           hover:bg-primary-50 transition-colors"
+              >
+                <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
+                <span className="text-xs text-gray-400">{f.member_count} חברים</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Create new family */}
+          <p className="text-sm font-semibold text-gray-600 mb-2">צור משפחה חדשה</p>
+          <div className="space-y-2">
+            <input
+              value={newFamilyName}
+              onChange={e => setNewFamilyName(e.target.value)}
+              placeholder="שם המשפחה..."
+              className="input text-sm"
+            />
+            <input
+              type="email"
+              value={newFamilyEmail}
+              onChange={e => setNewFamilyEmail(e.target.value)}
+              placeholder="אימייל מנהל המשפחה..."
+              className="input text-sm"
+              dir="ltr"
+            />
+            <button
+              onClick={createNewFamily}
+              disabled={!newFamilyName.trim() || !newFamilyEmail.trim() || creatingFamily}
+              className="btn-primary w-full text-sm"
+            >
+              {creatingFamily ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              צור משפחה + שלח הזמנה למנהל
+            </button>
+          </div>
+        </Section>
       )}
 
       {/* ── Sign out ── */}
