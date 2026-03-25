@@ -81,6 +81,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!profile) return
+    console.log('SettingsPage useEffect:', { id: profile.id, role: profile.role, is_superadmin: profile.is_superadmin, family_id: profile.family_id })
     setEditName(profile.full_name)
     if (profile.family_id) {
       loadFamilyData(profile.family_id)
@@ -88,7 +89,11 @@ export default function SettingsPage() {
     }
     loadStores()
     checkPushStatus()
-    if (profile.is_superadmin) { loadAllFamilies(); loadDashboard() }
+    if (profile.is_superadmin) {
+      console.log('SettingsPage: loading superadmin data...')
+      loadAllFamilies()
+      loadDashboard()
+    }
   }, [profile?.id, profile?.family_id, profile?.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkPushStatus() {
