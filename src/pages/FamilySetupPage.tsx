@@ -80,23 +80,15 @@ export default function FamilySetupPage() {
     setLoading(true)
     setError(null)
     try {
-      // Create family
-      const { data: fam, error: famErr } = await supabase
-        .from('families')
-        .insert({ name: familyName.trim() })
-        .select('id')
-        .single()
-      if (famErr || !fam) throw famErr ?? new Error('Failed to create family')
-
-      // Add creator as admin in family_members
-      await supabase.from('family_members').insert({
-        user_id: session.user.id,
-        family_id: fam.id,
-        role: 'admin',
+      const { data: famId, error: famErr } = await supabase.rpc('create_family_with_admin', {
+        family_name: familyName.trim(),
       })
+      if (famErr) throw famErr
+      if (!famId) throw new Error('Failed to create family')
+
       // Update users.family_id for backward compat
       await supabase.from('users').update({
-        family_id: fam.id,
+        family_id: famId,
         role: 'admin',
       }).eq('id', session.user.id)
 

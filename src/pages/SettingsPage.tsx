@@ -413,21 +413,14 @@ export default function SettingsPage() {
     if (!newName?.trim()) return
 
     try {
-      const { data: fam } = await supabase
-        .from('families')
-        .insert({ name: newName.trim() })
-        .select('id')
-        .single()
-      if (!fam) { alert('שגיאה ביצירת משפחה'); return }
-
-      await supabase.from('family_members').insert({
-        user_id: session.user.id,
-        family_id: fam.id,
-        role: 'admin',
+      const { data: famId, error } = await supabase.rpc('create_family_with_admin', {
+        family_name: newName.trim(),
       })
+      if (error) { alert('שגיאה ביצירת משפחה: ' + error.message); return }
+      if (!famId) { alert('שגיאה ביצירת משפחה'); return }
 
       await refreshProfile()
-      switchFamily(fam.id)
+      switchFamily(famId as string)
     } catch (err) {
       alert('שגיאה: ' + (err instanceof Error ? err.message : String(err)))
     }
