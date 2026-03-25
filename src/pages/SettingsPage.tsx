@@ -72,6 +72,9 @@ export default function SettingsPage() {
     family_memberships: { family_id: string; family_name: string; role: string }[]
   }[]>([])
   const [dashboardTab, setDashboardTab] = useState<'stats' | 'users'>('stats')
+  const [usersSearch, setUsersSearch] = useState('')
+  const [usersSort, setUsersSort] = useState<'name' | 'last_sign_in' | 'created_at'>('name')
+  const [usersRoleFilter, setUsersRoleFilter] = useState<'all' | 'admin' | 'member'>('all')
 
   // Add existing user to family (superadmin)
   const [userSearch, setUserSearch] = useState('')
@@ -1040,9 +1043,56 @@ export default function SettingsPage() {
           )}
 
           {/* Users table */}
-          {dashboardTab === 'users' && (
-            <div className="space-y-2 mb-4">
-              {allUsers.map(u => (
+          {dashboardTab === 'users' && (() => {
+            const q = usersSearch.trim().toLowerCase()
+            const filtered = allUsers
+              .filter(u => {
+                if (q && !u.full_name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false
+                if (usersRoleFilter === 'admin' && !u.family_memberships.some(fm => fm.role === 'admin')) return false
+                if (usersRoleFilter === 'member' && !u.family_memberships.some(fm => fm.role === 'member')) return false
+                return true
+              })
+              .sort((a, b) => {
+                if (usersSort === 'name') return a.full_name.localeCompare(b.full_name, 'he')
+                if (usersSort === 'last_sign_in') return (b.last_sign_in ?? '').localeCompare(a.last_sign_in ?? '')
+                return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+              })
+            return (
+            <div className="space-y-3 mb-4">
+              {/* Search + filters */}
+              <input
+                type="text"
+                value={usersSearch}
+                onChange={e => setUsersSearch(e.target.value)}
+                placeholder="חפש לפי שם או אימייל..."
+                className="input text-sm"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={usersSort}
+                  onChange={e => setUsersSort(e.target.value as typeof usersSort)}
+                  className="flex-1 text-xs border border-gray-200 rounded-xl px-2 py-2 bg-white
+                             focus:outline-none focus:border-primary-400"
+                >
+                  <option value="name">מיון: שם</option>
+                  <option value="last_sign_in">מיון: כניסה אחרונה</option>
+                  <option value="created_at">מיון: תאריך הצטרפות</option>
+                </select>
+                <select
+                  value={usersRoleFilter}
+                  onChange={e => setUsersRoleFilter(e.target.value as typeof usersRoleFilter)}
+                  className="flex-1 text-xs border border-gray-200 rounded-xl px-2 py-2 bg-white
+                             focus:outline-none focus:border-primary-400"
+                >
+                  <option value="all">הכל ({allUsers.length})</option>
+                  <option value="admin">מנהלים בלבד</option>
+                  <option value="member">חברים בלבד</option>
+                </select>
+              </div>
+              <p className="text-xs text-gray-400">{filtered.length} משתמשים</p>
+              {/* User cards */}
+              <div className="space-y-2">
+              {filtered.map(u => (
                 <div key={u.id} className="bg-gray-50 rounded-xl p-3">
                   <div className="flex items-start gap-2">
                     <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center
@@ -1098,8 +1148,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
-          )}
+            )})()}
 
           {/* All families (stats tab) */}
           {dashboardTab === 'stats' && (<>
