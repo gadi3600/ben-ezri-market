@@ -37,18 +37,21 @@ export default function FamilySetupPage() {
     // 2. Also check sessionStorage for invite token (from /join link)
     const savedToken = sessionStorage.getItem('pendingInviteToken')
     if (savedToken && !allInvites.some(inv => inv.id === savedToken)) {
-      const { data: tokenInvite } = await supabase
-        .from('invites')
-        .select('id, role, family_id')
-        .eq('id', savedToken)
-        .maybeSingle()
+      const { data: tokenData } = await supabase.rpc('get_invite_by_token', {
+        invite_token: savedToken,
+      })
+      const tokenInvite = Array.isArray(tokenData) ? tokenData[0] : tokenData
       if (tokenInvite) {
-        allInvites = [...allInvites, tokenInvite]
+        allInvites = [...allInvites, {
+          id: tokenInvite.id,
+          role: tokenInvite.role,
+          family_id: tokenInvite.family_id,
+        }]
       }
     }
 
     if (allInvites.length > 0) {
-      // Fetch family names
+      // Fetch family names (use RPC results if available, otherwise query)
       const familyIds = [...new Set(allInvites.map(d => d.family_id))]
       const { data: families } = await supabase
         .from('families')

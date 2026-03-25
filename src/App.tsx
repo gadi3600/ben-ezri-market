@@ -139,10 +139,7 @@ function AppContent() {
   }, [families.length])
 
   // Join page — accessible without login
-  if (location.pathname === '/join') {
-    console.log('🔗 App: rendering JoinPage, search:', location.search)
-    return <JoinPage />
-  }
+  if (location.pathname === '/join') return <JoinPage />
 
   // Password recovery screen
   if (passwordRecovery) return <PasswordResetScreen onDone={clearPasswordRecovery} />

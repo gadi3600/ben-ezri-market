@@ -11,14 +11,6 @@ export default function JoinPage() {
   const token = params.get('token')
   const role  = (params.get('role') ?? 'member') as Role
 
-  console.log('🔗 JoinPage mount:', {
-    url: window.location.href,
-    pathname: window.location.pathname,
-    search: window.location.search,
-    token,
-    role,
-    allParams: Object.fromEntries(params.entries()),
-  })
 
   const [invite, setInvite] = useState<{ email: string; role: Role; family_name: string } | null>(null)
   const [loadingInvite, setLoadingInvite] = useState(true)
@@ -34,13 +26,10 @@ export default function JoinPage() {
   const [info, setInfo]         = useState<string | null>(null)
 
   useEffect(() => {
-    console.log('🔗 JoinPage useEffect: token =', token)
     if (token) {
       sessionStorage.setItem('pendingInviteToken', token)
-      console.log('🔗 JoinPage: saved to sessionStorage:', token)
       loadInvite(token)
     } else {
-      console.log('🔗 JoinPage: no token found in URL')
       setLoadingInvite(false)
       setInvalidInvite(true)
     }
@@ -48,39 +37,25 @@ export default function JoinPage() {
 
   async function loadInvite(inviteId: string) {
     setLoadingInvite(true)
-    console.log('🔗 loadInvite: fetching invite id =', inviteId)
 
-    const { data, error } = await supabase
-      .from('invites')
-      .select('email, role, family_id')
-      .eq('id', inviteId)
-      .maybeSingle()
+    // Use RPC to bypass RLS (works for unauthenticated users)
+    const { data, error } = await supabase.rpc('get_invite_by_token', {
+      invite_token: inviteId,
+    })
 
-    console.log('🔗 loadInvite result:', { data, error: error?.message ?? null })
-
-    if (error || !data) {
+    const row = Array.isArray(data) ? data[0] : data
+    if (error || !row) {
       setInvalidInvite(true)
       setLoadingInvite(false)
       return
     }
 
-    // Fetch family name separately
-    let familyName = 'משפחה'
-    if (data.family_id) {
-      const { data: fam } = await supabase
-        .from('families')
-        .select('name')
-        .eq('id', data.family_id)
-        .maybeSingle()
-      if (fam?.name) familyName = fam.name
-    }
-
     setInvite({
-      email: data.email,
-      role: data.role as Role,
-      family_name: familyName,
+      email: row.email,
+      role: row.role as Role,
+      family_name: row.family_name ?? 'משפחה',
     })
-    setEmail(data.email)
+    setEmail(row.email)
     setLoadingInvite(false)
   }
 
