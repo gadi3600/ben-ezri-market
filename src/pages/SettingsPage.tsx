@@ -334,12 +334,14 @@ export default function SettingsPage() {
 
   // ── Dashboard functions ──
   async function loadDashboard() {
-    const [{ data: statsData }, { data: usersData }] = await Promise.all([
+    const [statsRes, usersRes] = await Promise.all([
       supabase.rpc('get_system_stats'),
       supabase.rpc('get_all_users_admin'),
     ])
-    if (statsData) setStats(statsData as typeof stats)
-    if (usersData) setAllUsers(usersData as typeof allUsers)
+    console.log('Dashboard stats:', statsRes.data, statsRes.error?.message)
+    console.log('Dashboard users:', usersRes.data?.length ?? 0, 'rows', usersRes.error?.message ?? 'ok')
+    if (statsRes.data) setStats(statsRes.data as typeof stats)
+    if (usersRes.data) setAllUsers(usersRes.data as typeof allUsers)
   }
 
   async function adminDeleteUser(userId: string, userName: string) {
