@@ -1054,9 +1054,14 @@ export default function SettingsPage() {
               })
               .sort((a, b) => {
                 let cmp = 0
-                if (usersSort === 'name') cmp = a.full_name.localeCompare(b.full_name, 'he')
-                else if (usersSort === 'last_sign_in') cmp = (b.last_sign_in ?? '').localeCompare(a.last_sign_in ?? '')
-                else cmp = (b.created_at ?? '').localeCompare(a.created_at ?? '')
+                if (usersSort === 'name') {
+                  cmp = a.full_name.localeCompare(b.full_name, 'he')
+                } else {
+                  const field = usersSort === 'last_sign_in' ? 'last_sign_in' : 'created_at'
+                  const ta = a[field] ? new Date(a[field]!).getTime() : 0
+                  const tb = b[field] ? new Date(b[field]!).getTime() : 0
+                  cmp = tb - ta // newest first by default
+                }
                 return usersSortAsc ? cmp : -cmp
               })
             return (
