@@ -355,7 +355,12 @@ export default function SettingsPage() {
   async function renameFamilyAdmin(familyId: string) {
     const trimmed = editFamilyName.trim()
     if (!trimmed) return
-    await supabase.from('families').update({ name: trimmed }).eq('id', familyId)
+    // Use RPC to bypass RLS (superadmin UPDATE policy missing on families)
+    const { error } = await supabase.rpc('rename_family', {
+      target_family_id: familyId,
+      new_name: trimmed,
+    })
+    if (error) { alert('שגיאה: ' + error.message); return }
     setAllFamilies(prev => prev.map(f => f.id === familyId ? { ...f, name: trimmed } : f))
     setEditingFamilyId(null)
   }
