@@ -429,6 +429,55 @@ export default function SettingsPage() {
     }
   }
 
+  async function leaveFamily() {
+    if (!session || !profile?.family_id) return
+    const familyId = profile.family_id
+
+    // Check if last member
+    const { data: memberRows } = await supabase
+      .from('family_members')
+      .select('user_id')
+      .eq('family_id', familyId)
+    const isLast = (memberRows?.length ?? 0) <= 1
+
+    if (isLast) {
+      if (!confirm('אתה החבר האחרון במשפחה זו. עזיבה תמחק את המשפחה לצמיתות. להמשיך?')) return
+      const { error } = await supabase.rpc('delete_family', { target_family_id: familyId })
+      if (error) { alert('שגיאה: ' + error.message); return }
+    } else {
+      if (!confirm('האם אתה בטוח שברצונך לעזוב את המשפחה?')) return
+      await supabase.from('family_members').delete()
+        .eq('user_id', session.user.id)
+        .eq('family_id', familyId)
+    }
+
+    await refreshProfile()
+    // Switch to another family or reload (will show FamilySetupPage if no families)
+    const remaining = families.filter(f => f.family_id !== familyId)
+    if (remaining.length > 0) {
+      switchFamily(remaining[0].family_id)
+    } else {
+      window.location.reload()
+    }
+  }
+
+  async function deleteFamilyAdmin() {
+    if (!profile?.family_id) return
+    const familyId = profile.family_id
+    if (!confirm('האם אתה בטוח?\n\nפעולה זו תמחק את המשפחה ואת כל הנתונים שלה לצמיתות.')) return
+
+    const { error } = await supabase.rpc('delete_family', { target_family_id: familyId })
+    if (error) { alert('שגיאה: ' + error.message); return }
+
+    await refreshProfile()
+    const remaining = families.filter(f => f.family_id !== familyId)
+    if (remaining.length > 0) {
+      switchFamily(remaining[0].family_id)
+    } else {
+      window.location.reload()
+    }
+  }
+
   async function loadStores() {
     const { data } = await supabase
       .from('stores').select('*').eq('is_active', true).eq('family_id', profile!.family_id).order('name')
@@ -957,6 +1006,29 @@ export default function SettingsPage() {
         <Plus className="w-5 h-5" />
         הקם משפחה חדשה
       </button>
+
+      {/* ── Leave family ── */}
+      {profile?.family_id && (
+        <button
+          onClick={leaveFamily}
+          className="w-full flex items-center justify-center gap-2 py-3 text-amber-600
+                     font-semibold hover:bg-amber-50 active:bg-amber-100 rounded-2xl transition-colors text-sm"
+        >
+          עזוב משפחה
+        </button>
+      )}
+
+      {/* ── Delete family (superadmin) ── */}
+      {profile?.is_superadmin && profile?.family_id && (
+        <button
+          onClick={deleteFamilyAdmin}
+          className="w-full flex items-center justify-center gap-2 py-3 text-red-500
+                     font-semibold hover:bg-red-50 active:bg-red-100 rounded-2xl transition-colors text-sm"
+        >
+          <Trash2 className="w-4 h-4" />
+          מחק משפחה
+        </button>
+      )}
 
       {/* ── Sign out ── */}
       <button
