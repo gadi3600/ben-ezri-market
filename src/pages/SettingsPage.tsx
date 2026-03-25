@@ -416,13 +416,14 @@ export default function SettingsPage() {
       const { data: famId, error } = await supabase.rpc('create_family_with_admin', {
         family_name: newName.trim(),
       })
-      if (error) { alert('שגיאה ביצירת משפחה: ' + error.message); return }
-      if (!famId) { alert('שגיאה ביצירת משפחה'); return }
+      alert(`RPC result:\ndata: ${JSON.stringify(famId)}\nerror: ${error ? `${error.code} - ${error.message}\nhint: ${error.hint}\ndetails: ${error.details}` : 'none'}`)
+      if (error) return
+      if (!famId) return
 
       await refreshProfile()
       switchFamily(famId as string)
     } catch (err) {
-      alert('שגיאה: ' + (err instanceof Error ? err.message : String(err)))
+      alert('Exception: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 
