@@ -74,7 +74,8 @@ export default function SettingsPage() {
   const [dashboardTab, setDashboardTab] = useState<'stats' | 'users'>('stats')
   const [usersSearch, setUsersSearch] = useState('')
   const [usersSort, setUsersSort] = useState<'name' | 'last_sign_in' | 'created_at'>('name')
-  const [usersRoleFilter, setUsersRoleFilter] = useState<'all' | 'admin' | 'member'>('all')
+  const [usersSortAsc, setUsersSortAsc] = useState(true)
+  const [usersRoleFilter, setUsersRoleFilter] = useState<'all' | 'admin' | 'member' | 'viewer'>('all')
 
   // Add existing user to family (superadmin)
   const [userSearch, setUserSearch] = useState('')
@@ -1048,14 +1049,15 @@ export default function SettingsPage() {
             const filtered = allUsers
               .filter(u => {
                 if (q && !u.full_name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false
-                if (usersRoleFilter === 'admin' && !u.family_memberships.some(fm => fm.role === 'admin')) return false
-                if (usersRoleFilter === 'member' && !u.family_memberships.some(fm => fm.role === 'member')) return false
+                if (usersRoleFilter !== 'all' && !u.family_memberships.some(fm => fm.role === usersRoleFilter)) return false
                 return true
               })
               .sort((a, b) => {
-                if (usersSort === 'name') return a.full_name.localeCompare(b.full_name, 'he')
-                if (usersSort === 'last_sign_in') return (b.last_sign_in ?? '').localeCompare(a.last_sign_in ?? '')
-                return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+                let cmp = 0
+                if (usersSort === 'name') cmp = a.full_name.localeCompare(b.full_name, 'he')
+                else if (usersSort === 'last_sign_in') cmp = (b.last_sign_in ?? '').localeCompare(a.last_sign_in ?? '')
+                else cmp = (b.created_at ?? '').localeCompare(a.created_at ?? '')
+                return usersSortAsc ? cmp : -cmp
               })
             return (
             <div className="space-y-3 mb-4">
@@ -1078,6 +1080,13 @@ export default function SettingsPage() {
                   <option value="last_sign_in">מיון: כניסה אחרונה</option>
                   <option value="created_at">מיון: תאריך הצטרפות</option>
                 </select>
+                <button
+                  onClick={() => setUsersSortAsc(v => !v)}
+                  className="w-10 flex items-center justify-center border border-gray-200 rounded-xl
+                             text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  {usersSortAsc ? '↑' : '↓'}
+                </button>
                 <select
                   value={usersRoleFilter}
                   onChange={e => setUsersRoleFilter(e.target.value as typeof usersRoleFilter)}
@@ -1087,6 +1096,7 @@ export default function SettingsPage() {
                   <option value="all">הכל ({allUsers.length})</option>
                   <option value="admin">מנהלים בלבד</option>
                   <option value="member">חברים בלבד</option>
+                  <option value="viewer">צופים בלבד</option>
                 </select>
               </div>
               <p className="text-xs text-gray-400">{filtered.length} משתמשים</p>
