@@ -476,13 +476,13 @@ export default function SettingsPage() {
       if (error) { alert('שגיאה: ' + error.message); return }
     } else {
       if (!confirm('האם אתה בטוח שברצונך לעזוב את המשפחה?')) return
-      await supabase.from('family_members').delete()
-        .eq('user_id', session.user.id)
-        .eq('family_id', familyId)
+      // Use RPC to bypass RLS (no DELETE policy for regular members)
+      const { error } = await supabase.rpc('leave_family', { target_family_id: familyId })
+      if (error) { alert('שגיאה: ' + error.message); return }
     }
 
+    localStorage.removeItem('activeFamilyId')
     await refreshProfile()
-    // Switch to another family or reload (will show FamilySetupPage if no families)
     const remaining = families.filter(f => f.family_id !== familyId)
     if (remaining.length > 0) {
       switchFamily(remaining[0].family_id)
