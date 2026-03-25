@@ -27,7 +27,7 @@ function Section({ icon, title, children }: { icon: ReactNode; title: string; ch
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { session, profile, refreshProfile, signOut, setViewingFamily, families, switchFamily, activeFamilyId, activeFamilyName } = useAuth()
+  const { session, profile, refreshProfile, signOut, setViewingFamily, families, switchFamily, activeFamilyId } = useAuth()
   const [family, setFamily]   = useState<Family | null>(null)
   const [members, setMembers] = useState<UserProfile[]>([])
   const [stores, setStores]   = useState<Store[]>([])
