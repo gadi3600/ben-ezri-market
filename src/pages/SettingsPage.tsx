@@ -64,6 +64,15 @@ export default function SettingsPage() {
   const [editingFamilyId, setEditingFamilyId] = useState<string | null>(null)
   const [editFamilyName, setEditFamilyName] = useState('')
 
+  // Dashboard (superadmin)
+  const [stats, setStats] = useState<{ total_users: number; total_families: number; total_items_purchased: number; total_shopping_lists: number } | null>(null)
+  const [allUsers, setAllUsers] = useState<{
+    id: string; full_name: string; email: string; is_superadmin: boolean
+    created_at: string; last_sign_in: string | null
+    family_memberships: { family_id: string; family_name: string; role: string }[]
+  }[]>([])
+  const [dashboardTab, setDashboardTab] = useState<'stats' | 'users'>('stats')
+
   // Add existing user to family (superadmin)
   const [userSearch, setUserSearch] = useState('')
   const [userResults, setUserResults] = useState<{ id: string; full_name: string; email: string }[]>([])
@@ -79,7 +88,7 @@ export default function SettingsPage() {
     }
     loadStores()
     checkPushStatus()
-    if (profile.is_superadmin) loadAllFamilies()
+    if (profile.is_superadmin) { loadAllFamilies(); loadDashboard() }
   }, [profile?.id, profile?.family_id, profile?.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkPushStatus() {
@@ -321,6 +330,40 @@ export default function SettingsPage() {
       setUserResults([])
     }
     setAddingUser(false)
+  }
+
+  // ── Dashboard functions ──
+  async function loadDashboard() {
+    const [{ data: statsData }, { data: usersData }] = await Promise.all([
+      supabase.rpc('get_system_stats'),
+      supabase.rpc('get_all_users_admin'),
+    ])
+    if (statsData) setStats(statsData as typeof stats)
+    if (usersData) setAllUsers(usersData as typeof allUsers)
+  }
+
+  async function adminDeleteUser(userId: string, userName: string) {
+    if (!confirm(`האם אתה בטוח?\n\nמחיקת ${userName} תסיר אותו מכל המשפחות ותמחק את החשבון לצמיתות.`)) return
+    const { error } = await supabase.rpc('admin_delete_user', { target_user_id: userId })
+    if (error) { alert('שגיאה: ' + error.message); return }
+    setAllUsers(prev => prev.filter(u => u.id !== userId))
+    setStats(prev => prev ? { ...prev, total_users: prev.total_users - 1 } : null)
+  }
+
+  async function adminChangeRole(userId: string, familyId: string, newRole: string) {
+    const { error } = await supabase.rpc('admin_change_role', {
+      target_user_id: userId,
+      target_family_id: familyId,
+      new_role: newRole,
+    })
+    if (error) { alert('שגיאה: ' + error.message); return }
+    setAllUsers(prev => prev.map(u =>
+      u.id === userId
+        ? { ...u, family_memberships: u.family_memberships.map(fm =>
+            fm.family_id === familyId ? { ...fm, role: newRole } : fm
+          )}
+        : u
+    ))
   }
 
   // ── Superadmin functions ──
@@ -950,9 +993,106 @@ export default function SettingsPage() {
       {/* ── Superadmin: System Management ── */}
       {profile?.is_superadmin && (
         <Section icon={<Crown className="w-5 h-5 text-amber-500" />} title="ניהול מערכת">
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2 mb-4">
-            🔑 סופר-אדמין — ניהול כל המשפחות
-          </p>
+          {/* Dashboard tabs */}
+          <div className="flex gap-2 mb-4">
+            {(['stats', 'users'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setDashboardTab(tab)}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  dashboardTab === tab
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                }`}
+              >
+                {tab === 'stats' ? '📊 סטטיסטיקות' : '👥 משתמשים'}
+              </button>
+            ))}
+          </div>
+
+          {/* Stats panel */}
+          {dashboardTab === 'stats' && stats && (
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-2xl font-extrabold text-amber-700">{stats.total_users}</p>
+                <p className="text-xs text-amber-600">משתמשים</p>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-2xl font-extrabold text-amber-700">{stats.total_families}</p>
+                <p className="text-xs text-amber-600">משפחות</p>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-2xl font-extrabold text-amber-700">{stats.total_items_purchased}</p>
+                <p className="text-xs text-amber-600">פריטים שנרכשו</p>
+              </div>
+              <div className="bg-amber-50 rounded-xl p-3 text-center">
+                <p className="text-2xl font-extrabold text-amber-700">{stats.total_shopping_lists}</p>
+                <p className="text-xs text-amber-600">רשימות קניות</p>
+              </div>
+            </div>
+          )}
+
+          {/* Users table */}
+          {dashboardTab === 'users' && (
+            <div className="space-y-2 mb-4">
+              {allUsers.map(u => (
+                <div key={u.id} className="bg-gray-50 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center
+                                    text-xs font-extrabold text-amber-700 flex-shrink-0 mt-0.5">
+                      {u.full_name?.charAt(0) ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold text-gray-800 truncate">{u.full_name}</p>
+                        {u.is_superadmin && <Crown className="w-3 h-3 text-amber-500 flex-shrink-0" />}
+                      </div>
+                      <p className="text-xs text-gray-400 truncate" dir="ltr">{u.email}</p>
+                      {/* Families + roles */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {u.family_memberships.map(fm => (
+                          <div key={fm.family_id} className="flex items-center gap-1 bg-white rounded-lg px-2 py-0.5 border border-gray-100">
+                            <span className="text-[10px] text-gray-600">{fm.family_name}</span>
+                            <select
+                              value={fm.role}
+                              onChange={e => adminChangeRole(u.id, fm.family_id, e.target.value)}
+                              className="text-[10px] font-bold text-primary-600 bg-transparent border-0 p-0
+                                         focus:outline-none cursor-pointer"
+                            >
+                              <option value="admin">מנהל</option>
+                              <option value="member">חבר</option>
+                              <option value="viewer">צופה</option>
+                            </select>
+                          </div>
+                        ))}
+                        {u.family_memberships.length === 0 && (
+                          <span className="text-[10px] text-gray-400">ללא משפחה</span>
+                        )}
+                      </div>
+                      {/* Dates */}
+                      <div className="flex gap-3 mt-1.5 text-[10px] text-gray-400">
+                        <span>נרשם: {new Date(u.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        {u.last_sign_in && (
+                          <span>כניסה אחרונה: {new Date(u.last_sign_in).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Delete button (not for self) */}
+                    {u.id !== profile?.id && (
+                      <button
+                        onClick={() => adminDeleteUser(u.id, u.full_name)}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
+                                   hover:bg-red-50 transition-colors flex-shrink-0"
+                        title="מחק משתמש"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* All families */}
           <p className="text-sm font-semibold text-gray-600 mb-2">
