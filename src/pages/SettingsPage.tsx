@@ -407,21 +407,12 @@ export default function SettingsPage() {
     }
   }
 
-  async function leaveAndCreateFamily() {
-    if (!profile?.family_id || !session) return
-    const familyName = activeFamilyName ?? 'המשפחה הנוכחית'
-    if (!confirm(`האם אתה בטוח?\n\nתעזוב את משפחת ${familyName} ותיצור משפחה חדשה.\nפעולה זו לא ניתנת לביטול.`)) return
-
+  async function createAdditionalFamily() {
+    if (!session) return
     const newName = prompt('שם המשפחה החדשה:')
     if (!newName?.trim()) return
 
     try {
-      // Remove from current family
-      await supabase.from('family_members').delete()
-        .eq('user_id', session.user.id)
-        .eq('family_id', profile.family_id)
-
-      // Create new family
       const { data: fam } = await supabase
         .from('families')
         .insert({ name: newName.trim() })
@@ -429,16 +420,11 @@ export default function SettingsPage() {
         .single()
       if (!fam) { alert('שגיאה ביצירת משפחה'); return }
 
-      // Add as admin
       await supabase.from('family_members').insert({
         user_id: session.user.id,
         family_id: fam.id,
         role: 'admin',
       })
-      await supabase.from('users').update({
-        family_id: fam.id,
-        role: 'admin',
-      }).eq('id', session.user.id)
 
       await refreshProfile()
       switchFamily(fam.id)
@@ -965,18 +951,16 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* ── Create new family (leave current) ── */}
-      {profile?.family_id && (
-        <button
-          onClick={leaveAndCreateFamily}
-          className="w-full flex items-center justify-center gap-2 py-3.5 text-gray-500
-                     font-semibold hover:bg-gray-50 active:bg-gray-100 rounded-2xl transition-colors
-                     border-2 border-dashed border-gray-200"
-        >
-          <Plus className="w-5 h-5" />
-          הקם משפחה חדשה
-        </button>
-      )}
+      {/* ── Create additional family ── */}
+      <button
+        onClick={createAdditionalFamily}
+        className="w-full flex items-center justify-center gap-2 py-3.5 text-gray-500
+                   font-semibold hover:bg-gray-50 active:bg-gray-100 rounded-2xl transition-colors
+                   border-2 border-dashed border-gray-200"
+      >
+        <Plus className="w-5 h-5" />
+        הקם משפחה חדשה
+      </button>
 
       {/* ── Sign out ── */}
       <button
