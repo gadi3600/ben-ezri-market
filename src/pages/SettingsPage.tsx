@@ -61,6 +61,8 @@ export default function SettingsPage() {
   const [newFamilyName, setNewFamilyName] = useState('')
   const [newFamilyEmail, setNewFamilyEmail] = useState('')
   const [creatingFamily, setCreatingFamily] = useState(false)
+  const [editingFamilyId, setEditingFamilyId] = useState<string | null>(null)
+  const [editFamilyName, setEditFamilyName] = useState('')
 
   // Add existing user to family (superadmin)
   const [userSearch, setUserSearch] = useState('')
@@ -350,6 +352,27 @@ export default function SettingsPage() {
     })))
   }
 
+  async function renameFamilyAdmin(familyId: string) {
+    const trimmed = editFamilyName.trim()
+    if (!trimmed) return
+    await supabase.from('families').update({ name: trimmed }).eq('id', familyId)
+    setAllFamilies(prev => prev.map(f => f.id === familyId ? { ...f, name: trimmed } : f))
+    setEditingFamilyId(null)
+  }
+
+  async function deleteFamilyFromList(familyId: string, familyName: string) {
+    if (!confirm(`האם אתה בטוח?\n\nפעולה זו תמחק את משפחת ${familyName} ואת כל הנתונים שלה לצמיתות.`)) return
+    const { error } = await supabase.rpc('delete_family', { target_family_id: familyId })
+    if (error) { alert('שגיאה: ' + error.message); return }
+    setAllFamilies(prev => prev.filter(f => f.id !== familyId))
+    // If currently viewing deleted family, switch away
+    if (profile?.family_id === familyId) {
+      const remaining = families.filter(f => f.family_id !== familyId)
+      if (remaining.length > 0) switchFamily(remaining[0].family_id)
+      else { await refreshProfile(); window.location.reload() }
+    }
+  }
+
   async function createNewFamily() {
     if (!newFamilyName.trim() || creatingFamily) return
     setCreatingFamily(true)
@@ -461,22 +484,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function deleteFamilyAdmin() {
-    if (!profile?.family_id) return
-    const familyId = profile.family_id
-    if (!confirm('האם אתה בטוח?\n\nפעולה זו תמחק את המשפחה ואת כל הנתונים שלה לצמיתות.')) return
-
-    const { error } = await supabase.rpc('delete_family', { target_family_id: familyId })
-    if (error) { alert('שגיאה: ' + error.message); return }
-
-    await refreshProfile()
-    const remaining = families.filter(f => f.family_id !== familyId)
-    if (remaining.length > 0) {
-      switchFamily(remaining[0].family_id)
-    } else {
-      window.location.reload()
-    }
-  }
 
   async function loadStores() {
     const { data } = await supabase
@@ -947,22 +954,60 @@ export default function SettingsPage() {
           <div className="space-y-1.5 mb-4">
             {allFamilies.map(f => (
               <div key={f.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors">
-                <button
-                  onClick={() => setViewingFamily(f.id, f.name)}
-                  className="flex-1 flex items-center gap-3 text-right"
-                >
-                  <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
-                  <span className="text-xs text-gray-400">{f.member_count} חברים</span>
-                </button>
-                <button
-                  onClick={() => createFamilyInviteLink(f.id, f.name)}
-                  className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500
-                             hover:bg-primary-50 transition-colors flex-shrink-0"
-                  title="צור לינק הזמנה"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
+                {editingFamilyId === f.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={editFamilyName}
+                      onChange={e => setEditFamilyName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') renameFamilyAdmin(f.id); if (e.key === 'Escape') setEditingFamilyId(null) }}
+                      className="input flex-1 text-sm py-1.5"
+                    />
+                    <button onClick={() => renameFamilyAdmin(f.id)}
+                      className="p-1.5 rounded-lg text-primary-500 hover:bg-primary-50 transition-colors flex-shrink-0">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setEditingFamilyId(null)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors flex-shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setViewingFamily(f.id, f.name)}
+                      className="flex-1 flex items-center gap-3 text-right"
+                    >
+                      <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
+                      <span className="text-xs text-gray-400">{f.member_count} חברים</span>
+                    </button>
+                    <button
+                      onClick={() => { setEditingFamilyId(f.id); setEditFamilyName(f.name) }}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500
+                                 hover:bg-primary-50 transition-colors flex-shrink-0"
+                      title="שנה שם"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => createFamilyInviteLink(f.id, f.name)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-primary-500
+                                 hover:bg-primary-50 transition-colors flex-shrink-0"
+                      title="צור לינק הזמנה"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteFamilyFromList(f.id, f.name)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500
+                                 hover:bg-red-50 transition-colors flex-shrink-0"
+                      title="מחק משפחה"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1015,18 +1060,6 @@ export default function SettingsPage() {
                      font-semibold hover:bg-amber-50 active:bg-amber-100 rounded-2xl transition-colors text-sm"
         >
           עזוב משפחה
-        </button>
-      )}
-
-      {/* ── Delete family (superadmin) ── */}
-      {profile?.is_superadmin && profile?.family_id && (
-        <button
-          onClick={deleteFamilyAdmin}
-          className="w-full flex items-center justify-center gap-2 py-3 text-red-500
-                     font-semibold hover:bg-red-50 active:bg-red-100 rounded-2xl transition-colors text-sm"
-        >
-          <Trash2 className="w-4 h-4" />
-          מחק משפחה
         </button>
       )}
 
