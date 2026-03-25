@@ -57,7 +57,7 @@ export default function SettingsPage() {
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
 
   // Superadmin
-  const [allFamilies, setAllFamilies] = useState<{ id: string; name: string; member_count: number }[]>([])
+  const [allFamilies, setAllFamilies] = useState<{ id: string; name: string; member_count: number; admin_email: string | null; created_at: string | null }[]>([])
   const [newFamilyName, setNewFamilyName] = useState('')
   const [newFamilyEmail, setNewFamilyEmail] = useState('')
   const [creatingFamily, setCreatingFamily] = useState(false)
@@ -325,30 +325,32 @@ export default function SettingsPage() {
 
   // ── Superadmin functions ──
   async function loadAllFamilies() {
-    // Two separate queries — avoids join/RLS issues
-    const [famsRes, membersRes] = await Promise.all([
-      supabase.from('families').select('id, name').order('name'),
+    const [famsRes, membersRes, adminsRes] = await Promise.all([
+      supabase.from('families').select('id, name, created_at').order('name'),
       supabase.from('family_members').select('family_id'),
+      supabase.rpc('get_family_admins'),
     ])
     const fams = famsRes.data
     const members = membersRes.data
-    console.log('loadAllFamilies:', {
-      fams: fams?.length ?? 0, famsError: famsRes.error?.message ?? null,
-      members: members?.length ?? 0, membersError: membersRes.error?.message ?? null,
-    })
 
     if (!fams) return
 
-    // Count members per family on client
     const countMap: Record<string, number> = {}
     for (const m of members ?? []) {
       countMap[m.family_id] = (countMap[m.family_id] ?? 0) + 1
     }
 
-    setAllFamilies(fams.map((f: { id: string; name: string }) => ({
+    const adminMap: Record<string, string> = {}
+    for (const a of (adminsRes.data ?? []) as { family_id: string; email: string }[]) {
+      if (!adminMap[a.family_id]) adminMap[a.family_id] = a.email
+    }
+
+    setAllFamilies(fams.map((f: { id: string; name: string; created_at: string }) => ({
       id: f.id,
       name: f.name ?? 'ללא שם',
       member_count: countMap[f.id] ?? 0,
+      admin_email: adminMap[f.id] ?? null,
+      created_at: f.created_at ?? null,
     })))
   }
 
@@ -981,11 +983,17 @@ export default function SettingsPage() {
                   <>
                     <button
                       onClick={() => setViewingFamily(f.id, f.name)}
-                      className="flex-1 flex items-center gap-3 text-right"
+                      className="flex-1 flex items-start gap-3 text-right"
                     >
-                      <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="flex-1 text-sm font-medium text-gray-700">{f.name}</span>
-                      <span className="text-xs text-gray-400">{f.member_count} חברים</span>
+                      <Users className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700">{f.name}</p>
+                        <p className="text-[11px] text-gray-400 truncate" dir="ltr">
+                          {f.admin_email ?? 'ללא מנהל'}
+                          {f.created_at && ` · ${new Date(f.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-400 mt-0.5">{f.member_count} חברים</span>
                     </button>
                     <button
                       onClick={() => { setEditingFamilyId(f.id); setEditFamilyName(f.name) }}
