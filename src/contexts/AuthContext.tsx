@@ -79,7 +79,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fetchProfile(userId),
       fetchMemberships(),
     ])
-    if (profileData) setProfile(profileData)
+    if (profileData) {
+      setProfile(profileData)
+      // Update last_seen_at (fire and forget)
+      supabase.from('users').update({ last_seen_at: new Date().toISOString() }).eq('id', userId)
+    }
 
     let finalMemberships = memberships
 
