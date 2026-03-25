@@ -19,28 +19,44 @@ export default function FamilySetupPage() {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [joiningId, setJoiningId] = useState<string | null>(null)
 
-  // Check for pending invites on mount
+  // Check for pending invites on mount (by email + sessionStorage token)
   useEffect(() => {
     if (!session?.user?.email) { setMode('choose'); return }
     checkInvites(session.user.email)
   }, [session?.user?.email])
 
   async function checkInvites(email: string) {
+    // 1. Check invites by email
     const { data } = await supabase
       .from('invites')
       .select('id, role, family_id')
       .eq('email', email.toLowerCase())
 
-    if (data && data.length > 0) {
+    let allInvites = data ?? []
+
+    // 2. Also check sessionStorage for invite token (from /join link)
+    const savedToken = sessionStorage.getItem('pendingInviteToken')
+    if (savedToken && !allInvites.some(inv => inv.id === savedToken)) {
+      const { data: tokenInvite } = await supabase
+        .from('invites')
+        .select('id, role, family_id')
+        .eq('id', savedToken)
+        .maybeSingle()
+      if (tokenInvite) {
+        allInvites = [...allInvites, tokenInvite]
+      }
+    }
+
+    if (allInvites.length > 0) {
       // Fetch family names
-      const familyIds = [...new Set(data.map(d => d.family_id))]
+      const familyIds = [...new Set(allInvites.map(d => d.family_id))]
       const { data: families } = await supabase
         .from('families')
         .select('id, name')
         .in('id', familyIds)
       const nameMap = new Map((families ?? []).map(f => [f.id, f.name ?? 'משפחה']))
 
-      setPendingInvites(data.map(inv => ({
+      setPendingInvites(allInvites.map(inv => ({
         id: inv.id,
         role: inv.role,
         family_id: inv.family_id,
@@ -66,8 +82,9 @@ export default function FamilySetupPage() {
         family_id: invite.family_id,
         role: invite.role,
       }).eq('id', session.user.id)
-      // Delete the used invite
+      // Delete the used invite + clear sessionStorage
       await supabase.from('invites').delete().eq('id', invite.id)
+      sessionStorage.removeItem('pendingInviteToken')
       await refreshProfile()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))

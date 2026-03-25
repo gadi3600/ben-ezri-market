@@ -25,8 +25,14 @@ export default function JoinPage() {
   const [info, setInfo]         = useState<string | null>(null)
 
   useEffect(() => {
-    if (token) loadInvite(token)
-    else { setLoadingInvite(false); setInvalidInvite(true) }
+    if (token) {
+      // Save invite token so FamilySetupPage can use it after login/register
+      sessionStorage.setItem('pendingInviteToken', token)
+      loadInvite(token)
+    } else {
+      setLoadingInvite(false)
+      setInvalidInvite(true)
+    }
   }, [token])
 
   async function loadInvite(inviteId: string) {
