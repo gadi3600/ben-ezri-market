@@ -1094,7 +1094,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* All families */}
+          {/* All families (stats tab) */}
+          {dashboardTab === 'stats' && (<>
           <p className="text-sm font-semibold text-gray-600 mb-2">
             משפחות ({allFamilies.length})
           </p>
@@ -1191,6 +1192,7 @@ export default function SettingsPage() {
               {newFamilyEmail.trim() ? 'צור משפחה + שלח הזמנה למנהל' : 'צור משפחה'}
             </button>
           </div>
+          </>)}
         </Section>
       )}
 
