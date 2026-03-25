@@ -566,7 +566,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4 pb-32">
+    <div className="space-y-4 pb-36 w-full max-w-full overflow-x-hidden">
 
       {/* ── Profile ── */}
       {/* ── Family switcher (if multiple families) ── */}
