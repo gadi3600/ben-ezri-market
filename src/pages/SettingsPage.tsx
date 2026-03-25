@@ -413,17 +413,19 @@ export default function SettingsPage() {
     if (!newName?.trim()) return
 
     try {
-      const { data: famId, error } = await supabase.rpc('create_family_with_admin', {
+      const { data, error } = await supabase.rpc('create_family_with_admin', {
         family_name: newName.trim(),
       })
-      alert(`RPC result:\ndata: ${JSON.stringify(famId)}\nerror: ${error ? `${error.code} - ${error.message}\nhint: ${error.hint}\ndetails: ${error.details}` : 'none'}`)
-      if (error) return
-      if (!famId) return
+      if (error) { alert('שגיאה: ' + error.message); return }
+
+      // RPC returns UUID directly as string
+      const famId = typeof data === 'string' ? data : String(data)
+      if (!famId || famId === 'null') { alert('שגיאה ביצירת משפחה'); return }
 
       await refreshProfile()
-      switchFamily(famId as string)
+      switchFamily(famId)
     } catch (err) {
-      alert('Exception: ' + (err instanceof Error ? err.message : String(err)))
+      alert('שגיאה: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 
