@@ -427,13 +427,17 @@ export default function ListPage() {
   function changeItemCategory(itemId: string, newCatId: string) {
     const item = items.find(i => i.id === itemId)
     if (!item || !profile?.family_id) return
+    console.log('🏷️ ListPage changeItemCategory:', item.name, '→', newCatId)
     setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
     supabase.from('item_categories').upsert({
       name: item.name,
       category: newCatId,
       family_id: profile.family_id,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'name,family_id' })
+    }, { onConflict: 'name,family_id' }).then(({ error }) => {
+      if (error) console.error('🏷️ ListPage upsert FAILED:', error.message)
+      else console.log('🏷️ ListPage upsert OK:', item.name)
+    })
   }
 
   // Group items by category
