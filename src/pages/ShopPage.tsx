@@ -561,7 +561,10 @@ export default function ShopPage() {
       if (catData) {
         const map: Record<string, string> = {}
         for (const r of catData) map[r.name] = r.category
+        console.log('🏷️ loaded savedCats:', Object.keys(map).length, 'entries', map)
         setSavedCats(map)
+      } else {
+        console.log('🏷️ no catData returned from item_categories')
       }
 
       // doneState logic
@@ -890,6 +893,10 @@ export default function ShopPage() {
   }
 
   function changeItemCategory(itemId: string, newCatId: string) {
+    const item = items.find(i => i.id === itemId)
+    const oldCat = item ? getItemCategory(item).id : 'unknown'
+    console.log('🏷️ changeItemCategory:', { itemId, itemName: item?.name, oldCat, newCatId, familyId: profile?.family_id })
+
     const newOverrides = { ...catOverrides, [itemId]: newCatId }
     setCatOverrides(newOverrides)
     saveOrderToDB('catOverrides', newOverrides)
@@ -899,15 +906,19 @@ export default function ShopPage() {
       saveOrderToDB('customOrder', newOrder)
     }
     // Save to DB for future sessions
-    const item = items.find(i => i.id === itemId)
     if (item && profile?.family_id) {
       supabase.from('item_categories').upsert({
         name:       item.name,
         category:   newCatId,
         family_id:  profile.family_id,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'name,family_id' })
+      }, { onConflict: 'name,family_id' }).then(({ error }) => {
+        if (error) console.error('🏷️ item_categories upsert FAILED:', error.message, error.code, error.details)
+        else console.log('🏷️ item_categories upsert OK:', item.name, '→', newCatId)
+      })
       setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
+    } else {
+      console.warn('🏷️ skipped DB save:', { hasItem: !!item, familyId: profile?.family_id })
     }
   }
 
