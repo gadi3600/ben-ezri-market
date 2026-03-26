@@ -11,6 +11,7 @@ dist-ssr
 # Environment files (keep .env.example)
 .env
 מפתח.txt
+View API Key*
 .env.local
 .env.development.local
 .env.test.local
