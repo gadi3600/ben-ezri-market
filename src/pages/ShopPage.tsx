@@ -510,7 +510,7 @@ export default function ShopPage() {
         .from('shopping_order')
         .select('type, order_data')
         .eq('family_id', profile!.family_id)
-        .in('type', ['customOrder', 'catOverrides', 'catOrder']),
+        .in('type', ['customOrder', 'catOrder']),
     ])
     console.timeEnd('⏱ batch1: stores+list+order')
 
@@ -526,7 +526,7 @@ export default function ShopPage() {
     // Apply order data
     for (const row of orderData ?? []) {
       if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
-      if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
+      // catOverrides removed — item_categories is single source of truth
       if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
     }
     setTimeout(() => { orderLoadedRef.current = true }, 100)
@@ -760,7 +760,6 @@ export default function ShopPage() {
   // ── custom sort order + category overrides (synced to DB) ──
   // Loaded in loadAll(), not separate useEffects
   const [customOrder, setCustomOrder] = useState<string[]>([])
-  const [catOverrides, setCatOverrides] = useState<Record<string, string>>({})
   const orderLoadedRef = useRef(false)
   const skipRealtimeRef = useRef(false)
 
@@ -797,7 +796,7 @@ export default function ShopPage() {
           if (skipRealtimeRef.current) return
           const row = payload.new as { type: string; order_data: unknown }
           if (row.type === 'customOrder' && Array.isArray(row.order_data)) setCustomOrder(row.order_data)
-          if (row.type === 'catOverrides' && row.order_data) setCatOverrides(row.order_data as Record<string, string>)
+          // catOverrides removed — item_categories is single source of truth
           if (row.type === 'catOrder' && Array.isArray(row.order_data)) setCatOrder(row.order_data as string[])
         },
       )
@@ -805,13 +804,9 @@ export default function ShopPage() {
     return () => { supabase.removeChannel(ch) }
   }, [profile?.family_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Get effective category: local override → DB saved → auto-classify
+  // Get effective category: DB saved (by name) → auto-classify
   function getItemCategory(item: ListItemWithUser): Category {
     const allCats: Record<string, Category> = { ...CAT, other: OTHER }
-    // 1. Local override (current session)
-    const overrideId = catOverrides[item.id]
-    if (overrideId && allCats[overrideId]) return allCats[overrideId]
-    // 2. Saved from DB (from previous shopping sessions)
     const savedId = savedCats[item.name]
     if (savedId && allCats[savedId]) return allCats[savedId]
     // 3. Auto-classify by name
@@ -825,7 +820,7 @@ export default function ShopPage() {
       const catB = CATEGORY_ORDER.indexOf(getItemCategory(b).id)
       return catA - catB
     })
-  }, [active, catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, savedCats]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flat sorted list
   const flatActive = useMemo(() => {
@@ -849,7 +844,7 @@ export default function ShopPage() {
       catMap.get(cat.id)!.items.push(item)
     })
     return [...catMap.values()].sort((a, b) => a.firstIdx - b.firstIdx)
-  }, [flatActive, catOverrides]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flatActive, savedCats]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Display order: categories then items within each
   const displayOrder = useMemo(() => groupedActive.flatMap(g => g.items), [groupedActive])
@@ -862,11 +857,13 @@ export default function ShopPage() {
     if (swapIdx < 0 || swapIdx >= ids.length) return
 
     const neighborCat = getItemCategory(displayOrder[swapIdx]).id
-    const movedCat = getItemCategory(displayOrder[idx]).id
-    if (neighborCat !== movedCat) {
-      const newOverrides = { ...catOverrides, [itemId]: neighborCat }
-      setCatOverrides(newOverrides)
-      saveOrderToDB('catOverrides', newOverrides)
+    const movedItem = displayOrder[idx]
+    const movedCat = getItemCategory(movedItem).id
+    if (neighborCat !== movedCat && profile?.family_id) {
+      setSavedCats(prev => ({ ...prev, [movedItem.name]: neighborCat }))
+      supabase.from('item_categories').upsert({
+        name: movedItem.name, category: neighborCat, family_id: profile.family_id, updated_at: new Date().toISOString(),
+      }, { onConflict: 'name,family_id' })
     }
 
     ;[ids[idx], ids[swapIdx]] = [ids[swapIdx], ids[idx]]
@@ -880,11 +877,13 @@ export default function ShopPage() {
     if (fromIdx < 0 || targetIdx < 0 || targetIdx >= ids.length) return
 
     const targetCat = getItemCategory(displayOrder[targetIdx]).id
-    const movedCat = getItemCategory(displayOrder[fromIdx]).id
-    if (targetCat !== movedCat) {
-      const newOverrides = { ...catOverrides, [itemId]: targetCat }
-      setCatOverrides(newOverrides)
-      saveOrderToDB('catOverrides', newOverrides)
+    const movedItem = displayOrder[fromIdx]
+    const movedCat = getItemCategory(movedItem).id
+    if (targetCat !== movedCat && profile?.family_id) {
+      setSavedCats(prev => ({ ...prev, [movedItem.name]: targetCat }))
+      supabase.from('item_categories').upsert({
+        name: movedItem.name, category: targetCat, family_id: profile.family_id, updated_at: new Date().toISOString(),
+      }, { onConflict: 'name,family_id' })
     }
 
     ;[ids[fromIdx], ids[targetIdx]] = [ids[targetIdx], ids[fromIdx]]
@@ -894,32 +893,25 @@ export default function ShopPage() {
 
   function changeItemCategory(itemId: string, newCatId: string) {
     const item = items.find(i => i.id === itemId)
-    const oldCat = item ? getItemCategory(item).id : 'unknown'
-    console.log('🏷️ changeItemCategory:', { itemId, itemName: item?.name, oldCat, newCatId, familyId: profile?.family_id })
+    if (!item || !profile?.family_id) return
 
-    const newOverrides = { ...catOverrides, [itemId]: newCatId }
-    setCatOverrides(newOverrides)
-    saveOrderToDB('catOverrides', newOverrides)
+    // Update local state immediately
+    setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
+
+    // Initialize custom order if needed
     if (customOrder.length === 0) {
       const newOrder = displayOrder.map(i => i.id)
       setCustomOrder(newOrder)
       saveOrderToDB('customOrder', newOrder)
     }
-    // Save to DB for future sessions
-    if (item && profile?.family_id) {
-      supabase.from('item_categories').upsert({
-        name:       item.name,
-        category:   newCatId,
-        family_id:  profile.family_id,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'name,family_id' }).then(({ error }) => {
-        if (error) console.error('🏷️ item_categories upsert FAILED:', error.message, error.code, error.details)
-        else console.log('🏷️ item_categories upsert OK:', item.name, '→', newCatId)
-      })
-      setSavedCats(prev => ({ ...prev, [item.name]: newCatId }))
-    } else {
-      console.warn('🏷️ skipped DB save:', { hasItem: !!item, familyId: profile?.family_id })
-    }
+
+    // Save to item_categories (single source of truth)
+    supabase.from('item_categories').upsert({
+      name:       item.name,
+      category:   newCatId,
+      family_id:  profile.family_id,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'name,family_id' })
   }
 
   // ── search ──
@@ -987,7 +979,6 @@ export default function ShopPage() {
 
   function resetOrder() {
     setCustomOrder([])
-    setCatOverrides({})
     setCatOrder([])
     setCollapsedCats(new Set())
     localStorage.removeItem('shopCollapsedCats')
