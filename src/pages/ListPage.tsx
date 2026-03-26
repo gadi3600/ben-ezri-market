@@ -219,6 +219,7 @@ const ItemRow = memo(function ItemRow({
   onToggleSelect,
   onChangeCategory,
   categories,
+  onAddCategory,
 }: {
   item: ListItemWithUser
   currentUserId: string
@@ -234,11 +235,15 @@ const ItemRow = memo(function ItemRow({
   onToggleSelect: (id: string) => void
   onChangeCategory: (catId: string) => void
   categories: Category[]
+  onAddCategory?: (name: string, emoji: string) => void
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
     : null
   const [showCatPicker, setShowCatPicker] = useState(false)
+  const [addingCat, setAddingCat] = useState(false)
+  const [catName, setCatName] = useState('')
+  const [catEmoji, setCatEmoji] = useState('📁')
 
   return (
     <div
@@ -273,11 +278,11 @@ const ItemRow = memo(function ItemRow({
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
                 <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
-                                overflow-hidden w-44 max-h-64 overflow-y-auto">
+                                overflow-hidden w-48 max-h-72 overflow-y-auto">
                   {categories.map(cat => (
                     <button
                       key={cat.id}
-                      onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false) }}
+                      onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
                       className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
                                  ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                     >
@@ -285,6 +290,70 @@ const ItemRow = memo(function ItemRow({
                       <span>{cat.label}</span>
                     </button>
                   ))}
+                  {adminMode && onAddCategory && (
+                    <>
+                      <div className="border-t border-gray-100" />
+                      {!addingCat ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); setAddingCat(true) }}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium
+                                     text-primary-500 hover:bg-primary-50 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>הוסף קטגוריה</span>
+                        </button>
+                      ) : (
+                        <div className="p-2 space-y-1.5" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              value={catEmoji}
+                              onChange={e => setCatEmoji(e.target.value)}
+                              className="w-8 h-8 text-center text-sm border border-gray-200 rounded-lg
+                                         focus:outline-none focus:border-primary-400"
+                              maxLength={2}
+                            />
+                            <input
+                              value={catName}
+                              onChange={e => setCatName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && catName.trim()) {
+                                  onAddCategory(catName.trim(), catEmoji || '📁')
+                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                                }
+                              }}
+                              className="flex-1 h-8 px-2 border border-gray-200 rounded-lg text-xs
+                                         focus:outline-none focus:border-primary-400"
+                              placeholder="שם קטגוריה..."
+                              autoFocus
+                              dir="rtl"
+                            />
+                          </div>
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={e => { e.stopPropagation(); setAddingCat(false); setCatName('') }}
+                              className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1"
+                            >
+                              ביטול
+                            </button>
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                if (catName.trim()) {
+                                  onAddCategory(catName.trim(), catEmoji || '📁')
+                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                                }
+                              }}
+                              disabled={!catName.trim()}
+                              className="text-[10px] font-bold text-white bg-primary-500 hover:bg-primary-600
+                                         disabled:opacity-40 px-3 py-1 rounded-lg"
+                            >
+                              הוסף
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -392,9 +461,6 @@ export default function ListPage() {
 
   // Custom categories
   const [customCats, setCustomCats] = useState<CustomCategoryRow[]>([])
-  const [showAddCat, setShowAddCat] = useState(false)
-  const [newCatName, setNewCatName] = useState('')
-  const [newCatEmoji, setNewCatEmoji] = useState('📁')
   const { allCats, allList, order: catOrder } = buildAllCategories(customCats)
 
   const inputRef       = useRef<HTMLInputElement>(null)
@@ -524,31 +590,22 @@ export default function ListPage() {
     if (data) setCustomCats(data)
   }
 
-  async function addCustomCategory() {
-    if (!profile?.family_id || !newCatName.trim()) return
+  async function addCustomCategory(name: string, emoji: string) {
+    if (!profile?.family_id || !name.trim()) return
     const { data, error } = await supabase
       .from('custom_categories')
       .insert({
         family_id: profile.family_id,
-        name: newCatName.trim(),
-        emoji: newCatEmoji || '📁',
+        name: name.trim(),
+        emoji: emoji || '📁',
         created_by: profile.id,
       })
       .select()
       .single()
     if (error) { console.error('Add custom category failed:', error.message); return }
     if (data) setCustomCats(prev => [...prev, data])
-    setNewCatName('')
-    setNewCatEmoji('📁')
-    setShowAddCat(false)
   }
 
-  async function deleteCustomCategory(catId: string) {
-    const row = customCats.find(c => `custom_${c.id}` === catId)
-    if (!row) return
-    await supabase.from('custom_categories').delete().eq('id', row.id)
-    setCustomCats(prev => prev.filter(c => c.id !== row.id))
-  }
 
   async function loadSuggestions() {
     if (!profile?.family_id) return
@@ -920,6 +977,7 @@ export default function ListPage() {
                     onToggleSelect={toggleSelect}
                     onChangeCategory={catId => changeItemCategory(item.id, catId)}
                     categories={allList}
+                    onAddCategory={addCustomCategory}
                   />
                 ))}
               </div>
@@ -928,78 +986,6 @@ export default function ListPage() {
         </div>
       )}
 
-      {/* Custom categories management (admin only) */}
-      {isAdmin(profile!.role) && (
-        <div className="mt-4 mb-2">
-          {!showAddCat ? (
-            <button
-              onClick={() => setShowAddCat(true)}
-              className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700
-                         font-medium transition-colors px-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              הוסף קטגוריה
-            </button>
-          ) : (
-            <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={newCatEmoji}
-                  onChange={e => setNewCatEmoji(e.target.value)}
-                  className="w-10 h-10 text-center text-xl border border-gray-200 rounded-xl
-                             focus:outline-none focus:border-primary-400"
-                  maxLength={2}
-                  placeholder="📁"
-                />
-                <input
-                  value={newCatName}
-                  onChange={e => setNewCatName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') addCustomCategory() }}
-                  className="flex-1 h-10 px-3 border border-gray-200 rounded-xl text-sm
-                             focus:outline-none focus:border-primary-400"
-                  placeholder="שם הקטגוריה..."
-                  autoFocus
-                  dir="rtl"
-                />
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                <button
-                  onClick={() => { setShowAddCat(false); setNewCatName(''); setNewCatEmoji('📁') }}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 transition-colors"
-                >
-                  ביטול
-                </button>
-                <button
-                  onClick={addCustomCategory}
-                  disabled={!newCatName.trim()}
-                  className="text-xs font-bold text-white bg-primary-500 hover:bg-primary-600
-                             disabled:opacity-40 px-4 py-1.5 rounded-xl transition-colors"
-                >
-                  הוסף
-                </button>
-              </div>
-            </div>
-          )}
-          {/* List custom categories with delete */}
-          {customCats.length > 0 && !showAddCat && (
-            <div className="flex flex-wrap gap-1.5 mt-2 px-1">
-              {customCats.map(c => (
-                <span key={c.id} className="inline-flex items-center gap-1 bg-gray-50 text-xs text-gray-600
-                                            rounded-full px-2.5 py-1 border border-gray-100">
-                  <span>{c.emoji}</span>
-                  <span>{c.name}</span>
-                  <button
-                    onClick={() => deleteCustomCategory(`custom_${c.id}`)}
-                    className="text-gray-300 hover:text-red-400 transition-colors mr-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Bulk delete bar (select mode, admin only) */}
       {selectMode && selectedIds.size > 0 && isAdmin(profile!.role) && (

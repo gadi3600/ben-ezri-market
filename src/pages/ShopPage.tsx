@@ -8,7 +8,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
-import { canEdit } from '../lib/permissions'
+import { canEdit, isAdmin as checkAdmin } from '../lib/permissions'
 import { classifyItem, buildAllCategories } from '../lib/categories'
 import type { Category, CustomCategoryRow } from '../lib/categories'
 import ReceiptModal from '../components/ReceiptModal'
@@ -248,6 +248,8 @@ const ActiveItem = memo(function ActiveItem({
   onMoveTo,
   onChangeCategory,
   categories,
+  isAdmin,
+  onAddCategory,
 }: {
   item: ListItemWithUser
   itemCategory: Category
@@ -262,11 +264,16 @@ const ActiveItem = memo(function ActiveItem({
   onMoveTo: (targetIdx: number) => void
   onChangeCategory: (catId: string) => void
   categories: Category[]
+  isAdmin?: boolean
+  onAddCategory?: (name: string, emoji: string) => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
   const [editingPos, setEditingPos] = useState(false)
   const [posValue, setPosValue] = useState('')
   const [showCatPicker, setShowCatPicker] = useState(false)
+  const [addingCat, setAddingCat] = useState(false)
+  const [catName, setCatName] = useState('')
+  const [catEmoji, setCatEmoji] = useState('📁')
 
   function handlePosSubmit() {
     const target = parseInt(posValue, 10) - 1
@@ -335,11 +342,11 @@ const ActiveItem = memo(function ActiveItem({
           <>
             <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
             <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
-                            overflow-hidden w-44 max-h-64 overflow-y-auto">
+                            overflow-hidden w-48 max-h-72 overflow-y-auto">
               {categories.map(cat => (
                 <button
                   key={cat.id}
-                  onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false) }}
+                  onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
                   className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
                              ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
                 >
@@ -347,6 +354,69 @@ const ActiveItem = memo(function ActiveItem({
                   <span>{cat.label}</span>
                 </button>
               ))}
+              {isAdmin && onAddCategory && (
+                <>
+                  <div className="border-t border-gray-100" />
+                  {!addingCat ? (
+                    <button
+                      onClick={() => setAddingCat(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium
+                                 text-primary-500 hover:bg-primary-50 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>הוסף קטגוריה</span>
+                    </button>
+                  ) : (
+                    <div className="p-2 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={catEmoji}
+                          onChange={e => setCatEmoji(e.target.value)}
+                          className="w-8 h-8 text-center text-sm border border-gray-200 rounded-lg
+                                     focus:outline-none focus:border-primary-400"
+                          maxLength={2}
+                        />
+                        <input
+                          value={catName}
+                          onChange={e => setCatName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && catName.trim()) {
+                              onAddCategory(catName.trim(), catEmoji || '📁')
+                              setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                            }
+                          }}
+                          className="flex-1 h-8 px-2 border border-gray-200 rounded-lg text-xs
+                                     focus:outline-none focus:border-primary-400"
+                          placeholder="שם קטגוריה..."
+                          autoFocus
+                          dir="rtl"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          onClick={() => { setAddingCat(false); setCatName('') }}
+                          className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1"
+                        >
+                          ביטול
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (catName.trim()) {
+                              onAddCategory(catName.trim(), catEmoji || '📁')
+                              setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                            }
+                          }}
+                          disabled={!catName.trim()}
+                          className="text-[10px] font-bold text-white bg-primary-500 hover:bg-primary-600
+                                     disabled:opacity-40 px-3 py-1 rounded-lg"
+                        >
+                          הוסף
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}
@@ -896,6 +966,22 @@ export default function ShopPage() {
     saveOrderToDB('customOrder', ids)
   }
 
+  async function addCustomCategory(name: string, emoji: string) {
+    if (!profile?.family_id || !name.trim()) return
+    const { data, error } = await supabase
+      .from('custom_categories')
+      .insert({
+        family_id: profile.family_id,
+        name: name.trim(),
+        emoji: emoji || '📁',
+        created_by: profile.id,
+      })
+      .select()
+      .single()
+    if (error) { console.error('Add custom category failed:', error.message); return }
+    if (data) setCustomCats(prev => [...prev, data])
+  }
+
   function changeItemCategory(itemId: string, newCatId: string) {
     const item = items.find(i => i.id === itemId)
     if (!item || !profile?.family_id) return
@@ -1193,6 +1279,8 @@ export default function ShopPage() {
                     onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
                     onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
                     categories={allCatsList}
+                    isAdmin={checkAdmin(profile!.role)}
+                    onAddCategory={addCustomCategory}
                   />
                 )
               })}
@@ -1257,6 +1345,8 @@ export default function ShopPage() {
                             onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
                             onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
                             categories={allCatsList}
+                            isAdmin={checkAdmin(profile!.role)}
+                            onAddCategory={addCustomCategory}
                           />
                         )
                       })}
