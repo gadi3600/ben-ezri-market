@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription, sendPushToFamily } from '../lib/push'
 import { canEdit, isAdmin } from '../lib/permissions'
-import { classifyItem, buildAllCategories } from '../lib/categories'
+import { classifyItem, buildAllCategories, suggestEmoji } from '../lib/categories'
 import type { Category, CustomCategoryRow } from '../lib/categories'
 import type { ShoppingList, ListItem } from '../lib/types'
 
@@ -244,6 +244,18 @@ const ItemRow = memo(function ItemRow({
   const [addingCat, setAddingCat] = useState(false)
   const [catName, setCatName] = useState('')
   const [catEmoji, setCatEmoji] = useState('📁')
+  const [emojiManual, setEmojiManual] = useState(false)
+  const emojiTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  function handleCatNameChange(val: string) {
+    setCatName(val)
+    if (emojiManual) return
+    if (emojiTimerRef.current) clearTimeout(emojiTimerRef.current)
+    if (!val.trim()) { setCatEmoji('📁'); return }
+    emojiTimerRef.current = setTimeout(() => {
+      suggestEmoji(val).then(e => setCatEmoji(e))
+    }, 500)
+  }
 
   return (
     <div
@@ -307,18 +319,18 @@ const ItemRow = memo(function ItemRow({
                           <div className="flex items-center gap-1.5">
                             <input
                               value={catEmoji}
-                              onChange={e => setCatEmoji(e.target.value)}
+                              onChange={e => { setCatEmoji(e.target.value); setEmojiManual(true) }}
                               className="w-8 h-8 text-center text-sm border border-gray-200 rounded-lg
                                          focus:outline-none focus:border-primary-400"
                               maxLength={2}
                             />
                             <input
                               value={catName}
-                              onChange={e => setCatName(e.target.value)}
+                              onChange={e => handleCatNameChange(e.target.value)}
                               onKeyDown={e => {
                                 if (e.key === 'Enter' && catName.trim()) {
                                   onAddCategory(catName.trim(), catEmoji || '📁')
-                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false); setEmojiManual(false)
                                 }
                               }}
                               className="flex-1 h-8 px-2 border border-gray-200 rounded-lg text-xs
@@ -330,7 +342,7 @@ const ItemRow = memo(function ItemRow({
                           </div>
                           <div className="flex justify-end gap-1.5">
                             <button
-                              onClick={e => { e.stopPropagation(); setAddingCat(false); setCatName('') }}
+                              onClick={e => { e.stopPropagation(); setAddingCat(false); setCatName(''); setEmojiManual(false) }}
                               className="text-[10px] text-gray-400 hover:text-gray-600 px-2 py-1"
                             >
                               ביטול
@@ -340,7 +352,7 @@ const ItemRow = memo(function ItemRow({
                                 e.stopPropagation()
                                 if (catName.trim()) {
                                   onAddCategory(catName.trim(), catEmoji || '📁')
-                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false)
+                                  setCatName(''); setCatEmoji('📁'); setAddingCat(false); setEmojiManual(false)
                                 }
                               }}
                               disabled={!catName.trim()}

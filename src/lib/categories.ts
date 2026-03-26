@@ -74,6 +74,35 @@ export function buildAllCategories(customRows: CustomCategoryRow[]): {
   return { allCats, allList, order }
 }
 
+// Suggest emoji for a category name via AI
+let suggestController: AbortController | null = null
+
+export async function suggestEmoji(name: string): Promise<string> {
+  if (!name.trim()) return '📁'
+  // Abort previous in-flight request
+  if (suggestController) suggestController.abort()
+  suggestController = new AbortController()
+
+  try {
+    const resp = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/suggest-emoji`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ name }),
+        signal: suggestController.signal,
+      },
+    )
+    const data = await resp.json()
+    return data?.emoji || '📁'
+  } catch {
+    return '📁'
+  }
+}
+
 export function classifyItem(name: string): Category {
   const lower = name.trim().toLowerCase()
   if (/^פיקדון$/.test(lower)) return OTHER
