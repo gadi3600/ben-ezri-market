@@ -54,9 +54,10 @@ export async function sendPushToFamily(
   familyId: string,
   title: string,
   body: string,
+  excludeUserId?: string,
 ): Promise<void> {
   try {
-    await fetch(
+    const resp = await fetch(
       'https://lbeivhmaesgissghtzzh.supabase.co/functions/v1/send-push',
       {
         method: 'POST',
@@ -64,9 +65,11 @@ export async function sendPushToFamily(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
         },
-        body: JSON.stringify({ family_id: familyId, title, body }),
+        body: JSON.stringify({ family_id: familyId, title, body, exclude_user_id: excludeUserId }),
       },
     )
+    const result = await resp.json()
+    console.log('📨 send-push response:', result)
   } catch (err) {
     console.error('Push send failed:', err)
   }

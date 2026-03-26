@@ -22,7 +22,8 @@ serve(async (req) => {
   }
 
   try {
-    const { family_id, title, body } = await req.json()
+    const { family_id, title, body, exclude_user_id } = await req.json()
+    console.log('📨 send-push called:', { family_id, exclude_user_id, title })
     if (!family_id || !title) {
       return new Response(JSON.stringify({ error: 'Missing family_id or title' }), {
         status: 400,
@@ -31,10 +32,19 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
-    const { data: subs } = await supabase
+
+    // First: fetch ALL subscriptions for this family (for debugging)
+    const { data: allSubs, error: allErr } = await supabase
       .from('push_subscriptions')
-      .select('id, subscription')
+      .select('id, user_id, subscription')
       .eq('family_id', family_id)
+    console.log('📨 ALL subs for family:', allSubs?.map(s => s.user_id), 'error:', allErr?.message)
+
+    // Now filter out the sender
+    const subs = exclude_user_id
+      ? allSubs?.filter(s => s.user_id !== exclude_user_id)
+      : allSubs
+    console.log('📨 After excluding', exclude_user_id, '→ sending to:', subs?.map(s => s.user_id))
 
     const payload = JSON.stringify({ title, body })
     let sent = 0
@@ -61,7 +71,15 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ sent, total: (subs ?? []).length, errors }), {
+    return new Response(JSON.stringify({
+      sent,
+      total: (subs ?? []).length,
+      all_subs_count: allSubs?.length ?? 0,
+      all_user_ids: allSubs?.map(s => s.user_id),
+      excluded: exclude_user_id,
+      sending_to: subs?.map(s => s.user_id),
+      errors,
+    }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     })
   } catch (err) {

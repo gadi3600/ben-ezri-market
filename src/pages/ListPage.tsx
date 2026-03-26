@@ -621,12 +621,19 @@ export default function ListPage() {
         prev.includes(trimmedName) ? prev : [...prev, trimmedName]
       )
 
-      // Send push notification to family
+      // Send push notification to other family members (exclude self)
       if (profile.family_id) {
+        console.log('📨 sendPushToFamily params:', {
+          family_id: profile.family_id,
+          title: 'בן עזרי מרקט 🛒',
+          body: `${profile.full_name} הוסיף "${trimmedName}" לרשימה`,
+          exclude_user_id: profile.id,
+        })
         sendPushToFamily(
           profile.family_id,
           'בן עזרי מרקט 🛒',
           `${profile.full_name} הוסיף "${trimmedName}" לרשימה`,
+          profile.id,
         )
       }
     }
