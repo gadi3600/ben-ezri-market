@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import {
   ShoppingCart, CheckCircle2, Trophy,
   ChevronDown, ChevronUp, ArrowLeft, Undo2,
-  Plus, X, MapPin, MoveUp, MoveDown,
+  Plus, X, MapPin, MoveUp, MoveDown, Trash2,
   Search, ChevronLeft, ChevronsUpDown,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -250,6 +250,7 @@ const ActiveItem = memo(function ActiveItem({
   categories,
   isAdmin,
   onAddCategory,
+  onDeleteCategory,
 }: {
   item: ListItemWithUser
   itemCategory: Category
@@ -266,6 +267,7 @@ const ActiveItem = memo(function ActiveItem({
   categories: Category[]
   isAdmin?: boolean
   onAddCategory?: (name: string, emoji: string) => void
+  onDeleteCategory?: (catId: string) => void
 }) {
   const hasExtra = !!(item.note || item.image_url)
   const [editingPos, setEditingPos] = useState(false)
@@ -356,15 +358,28 @@ const ActiveItem = memo(function ActiveItem({
             <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
                             overflow-hidden w-48 max-h-72 overflow-y-auto">
               {categories.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
-                             ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
-                >
-                  <span className="text-base">{cat.emoji}</span>
-                  <span>{cat.label}</span>
-                </button>
+                <div key={cat.id} className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
+                             ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}>
+                  <button
+                    className="flex-1 flex items-center gap-2 text-start"
+                    onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
+                  >
+                    <span className="text-base">{cat.emoji}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                  {isAdmin && onDeleteCategory && cat.id.startsWith('custom_') && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`למחוק את הקטגוריה "${cat.label}"?`)) {
+                          onDeleteCategory(cat.id)
+                        }
+                      }}
+                      className="p-0.5 text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               ))}
               {isAdmin && onAddCategory && (
                 <>
@@ -994,6 +1009,13 @@ export default function ShopPage() {
     if (data) setCustomCats(prev => [...prev, data])
   }
 
+  async function deleteCustomCategory(catId: string) {
+    const row = customCats.find(c => `custom_${c.id}` === catId)
+    if (!row) return
+    await supabase.from('custom_categories').delete().eq('id', row.id)
+    setCustomCats(prev => prev.filter(c => c.id !== row.id))
+  }
+
   function changeItemCategory(itemId: string, newCatId: string) {
     const item = items.find(i => i.id === itemId)
     if (!item || !profile?.family_id) return
@@ -1293,6 +1315,7 @@ export default function ShopPage() {
                     categories={allCatsList}
                     isAdmin={checkAdmin(profile!.role)}
                     onAddCategory={addCustomCategory}
+                    onDeleteCategory={deleteCustomCategory}
                   />
                 )
               })}

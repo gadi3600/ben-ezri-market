@@ -220,6 +220,7 @@ const ItemRow = memo(function ItemRow({
   onChangeCategory,
   categories,
   onAddCategory,
+  onDeleteCategory,
 }: {
   item: ListItemWithUser
   currentUserId: string
@@ -236,6 +237,7 @@ const ItemRow = memo(function ItemRow({
   onChangeCategory: (catId: string) => void
   categories: Category[]
   onAddCategory?: (name: string, emoji: string) => void
+  onDeleteCategory?: (catId: string) => void
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
@@ -292,15 +294,29 @@ const ItemRow = memo(function ItemRow({
                 <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
                                 overflow-hidden w-48 max-h-72 overflow-y-auto">
                   {categories.map(cat => (
-                    <button
-                      key={cat.id}
-                      onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
-                                 ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}
-                    >
-                      <span className="text-base">{cat.emoji}</span>
-                      <span>{cat.label}</span>
-                    </button>
+                    <div key={cat.id} className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-colors
+                                 ${cat.id === itemCategory.id ? 'bg-primary-50 text-primary-700 font-bold' : 'text-gray-700 hover:bg-gray-50'}`}>
+                      <button
+                        className="flex-1 flex items-center gap-2 text-start"
+                        onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false); setAddingCat(false) }}
+                      >
+                        <span className="text-base">{cat.emoji}</span>
+                        <span>{cat.label}</span>
+                      </button>
+                      {adminMode && onDeleteCategory && cat.id.startsWith('custom_') && (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            if (confirm(`למחוק את הקטגוריה "${cat.label}"?`)) {
+                              onDeleteCategory(cat.id)
+                            }
+                          }}
+                          className="p-0.5 text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                   {adminMode && onAddCategory && (
                     <>
@@ -600,6 +616,13 @@ export default function ListPage() {
       .eq('family_id', profile.family_id)
       .order('created_at')
     if (data) setCustomCats(data)
+  }
+
+  async function deleteCustomCategory(catId: string) {
+    const row = customCats.find(c => `custom_${c.id}` === catId)
+    if (!row) return
+    await supabase.from('custom_categories').delete().eq('id', row.id)
+    setCustomCats(prev => prev.filter(c => c.id !== row.id))
   }
 
   async function addCustomCategory(name: string, emoji: string) {
@@ -990,6 +1013,7 @@ export default function ListPage() {
                     onChangeCategory={catId => changeItemCategory(item.id, catId)}
                     categories={allList}
                     onAddCategory={addCustomCategory}
+                    onDeleteCategory={deleteCustomCategory}
                   />
                 ))}
               </div>
