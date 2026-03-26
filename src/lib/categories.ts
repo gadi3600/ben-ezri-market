@@ -36,6 +36,44 @@ export const CATEGORY_ORDER = [
   'produce', 'dairy', 'meat', 'dry', 'frozen', 'drinks', 'snacks', 'cleaning', 'disposable', 'other',
 ]
 
+// Custom category DB row
+export interface CustomCategoryRow {
+  id: string
+  family_id: string
+  name: string
+  emoji: string
+  created_by: string | null
+}
+
+// Color palette for custom categories (cycles through)
+const CUSTOM_COLORS = ['#6366f1', '#d946ef', '#14b8a6', '#f43f5e', '#84cc16', '#a855f7', '#0ea5e9', '#e11d48']
+
+export function customCatToCategory(row: CustomCategoryRow, index: number): Category {
+  return {
+    id: `custom_${row.id}`,
+    label: row.name,
+    emoji: row.emoji,
+    color: CUSTOM_COLORS[index % CUSTOM_COLORS.length],
+  }
+}
+
+// Build merged maps/lists from system + custom categories
+export function buildAllCategories(customRows: CustomCategoryRow[]): {
+  allCats: Record<string, Category>
+  allList: Category[]
+  order: string[]
+} {
+  const allCats: Record<string, Category> = { ...CAT, other: OTHER }
+  const customCats = customRows.map((r, i) => customCatToCategory(r, i))
+  for (const c of customCats) allCats[c.id] = c
+  const order = [...CATEGORY_ORDER]
+  // Insert custom categories before 'other'
+  const otherIdx = order.indexOf('other')
+  for (const c of customCats) order.splice(otherIdx, 0, c.id)
+  const allList = order.map(id => allCats[id]).filter(Boolean)
+  return { allCats, allList, order }
+}
+
 export function classifyItem(name: string): Category {
   const lower = name.trim().toLowerCase()
   if (/^פיקדון$/.test(lower)) return OTHER

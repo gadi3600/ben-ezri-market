@@ -8,12 +8,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription, sendPushToFamily } from '../lib/push'
 import { canEdit, isAdmin } from '../lib/permissions'
-import { classifyItem, CATEGORY_ORDER, CAT, OTHER } from '../lib/categories'
-import type { Category } from '../lib/categories'
+import { classifyItem, buildAllCategories } from '../lib/categories'
+import type { Category, CustomCategoryRow } from '../lib/categories'
 import type { ShoppingList, ListItem } from '../lib/types'
 
-const ALL_CATS: Record<string, Category> = { ...CAT, other: OTHER }
-const ALL_CATEGORIES = CATEGORY_ORDER.map(id => ALL_CATS[id]).filter(Boolean)
 
 // Extended item with joined user info
 interface ListItemWithUser extends ListItem {
@@ -220,6 +218,7 @@ const ItemRow = memo(function ItemRow({
   onLightbox,
   onToggleSelect,
   onChangeCategory,
+  categories,
 }: {
   item: ListItemWithUser
   currentUserId: string
@@ -234,6 +233,7 @@ const ItemRow = memo(function ItemRow({
   onLightbox: (src: string) => void
   onToggleSelect: (id: string) => void
   onChangeCategory: (catId: string) => void
+  categories: Category[]
 }) {
   const adderName = item.added_by_user
     ? (item.added_by === currentUserId ? 'אני' : item.added_by_user.full_name.split(' ')[0])
@@ -274,7 +274,7 @@ const ItemRow = memo(function ItemRow({
                 <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
                 <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
                                 overflow-hidden w-44 max-h-64 overflow-y-auto">
-                  {ALL_CATEGORIES.map(cat => (
+                  {categories.map(cat => (
                     <button
                       key={cat.id}
                       onClick={e => { e.stopPropagation(); onChangeCategory(cat.id); setShowCatPicker(false) }}
@@ -390,6 +390,13 @@ export default function ListPage() {
   // Saved categories from DB
   const [savedCats, setSavedCats] = useState<Record<string, string>>({})
 
+  // Custom categories
+  const [customCats, setCustomCats] = useState<CustomCategoryRow[]>([])
+  const [showAddCat, setShowAddCat] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatEmoji, setNewCatEmoji] = useState('📁')
+  const { allCats, allList, order: catOrder } = buildAllCategories(customCats)
+
   const inputRef       = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -406,7 +413,7 @@ export default function ListPage() {
 
   function getItemCategory(item: ListItemWithUser): Category {
     const savedId = savedCats[item.name]
-    if (savedId && ALL_CATS[savedId]) return ALL_CATS[savedId]
+    if (savedId && allCats[savedId]) return allCats[savedId]
     return classifyItem(item.name)
   }
 
@@ -449,7 +456,7 @@ export default function ListPage() {
       catMap.get(cat.id)!.items.push(item)
     }
     return [...catMap.values()].sort((a, b) =>
-      CATEGORY_ORDER.indexOf(a.category.id) - CATEGORY_ORDER.indexOf(b.category.id)
+      catOrder.indexOf(a.category.id) - catOrder.indexOf(b.category.id)
     )
   })()
 
@@ -457,6 +464,7 @@ export default function ListPage() {
     if (!profile?.family_id) return
     loadList()
     loadSuggestions()
+    loadCustomCategories()
     // Show push banner only if permission not yet decided and not dismissed
     if (
       'Notification' in window &&
@@ -505,6 +513,42 @@ export default function ListPage() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [list?.id])
+
+  async function loadCustomCategories() {
+    if (!profile?.family_id) return
+    const { data } = await supabase
+      .from('custom_categories')
+      .select('id, family_id, name, emoji, created_by')
+      .eq('family_id', profile.family_id)
+      .order('created_at')
+    if (data) setCustomCats(data)
+  }
+
+  async function addCustomCategory() {
+    if (!profile?.family_id || !newCatName.trim()) return
+    const { data, error } = await supabase
+      .from('custom_categories')
+      .insert({
+        family_id: profile.family_id,
+        name: newCatName.trim(),
+        emoji: newCatEmoji || '📁',
+        created_by: profile.id,
+      })
+      .select()
+      .single()
+    if (error) { console.error('Add custom category failed:', error.message); return }
+    if (data) setCustomCats(prev => [...prev, data])
+    setNewCatName('')
+    setNewCatEmoji('📁')
+    setShowAddCat(false)
+  }
+
+  async function deleteCustomCategory(catId: string) {
+    const row = customCats.find(c => `custom_${c.id}` === catId)
+    if (!row) return
+    await supabase.from('custom_categories').delete().eq('id', row.id)
+    setCustomCats(prev => prev.filter(c => c.id !== row.id))
+  }
 
   async function loadSuggestions() {
     if (!profile?.family_id) return
@@ -875,11 +919,85 @@ export default function ListPage() {
                     onEdit={setEditingItem} onLightbox={setLightboxSrc}
                     onToggleSelect={toggleSelect}
                     onChangeCategory={catId => changeItemCategory(item.id, catId)}
+                    categories={allList}
                   />
                 ))}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Custom categories management (admin only) */}
+      {isAdmin(profile!.role) && (
+        <div className="mt-4 mb-2">
+          {!showAddCat ? (
+            <button
+              onClick={() => setShowAddCat(true)}
+              className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700
+                         font-medium transition-colors px-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              הוסף קטגוריה
+            </button>
+          ) : (
+            <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={newCatEmoji}
+                  onChange={e => setNewCatEmoji(e.target.value)}
+                  className="w-10 h-10 text-center text-xl border border-gray-200 rounded-xl
+                             focus:outline-none focus:border-primary-400"
+                  maxLength={2}
+                  placeholder="📁"
+                />
+                <input
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addCustomCategory() }}
+                  className="flex-1 h-10 px-3 border border-gray-200 rounded-xl text-sm
+                             focus:outline-none focus:border-primary-400"
+                  placeholder="שם הקטגוריה..."
+                  autoFocus
+                  dir="rtl"
+                />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  onClick={() => { setShowAddCat(false); setNewCatName(''); setNewCatEmoji('📁') }}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 transition-colors"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={addCustomCategory}
+                  disabled={!newCatName.trim()}
+                  className="text-xs font-bold text-white bg-primary-500 hover:bg-primary-600
+                             disabled:opacity-40 px-4 py-1.5 rounded-xl transition-colors"
+                >
+                  הוסף
+                </button>
+              </div>
+            </div>
+          )}
+          {/* List custom categories with delete */}
+          {customCats.length > 0 && !showAddCat && (
+            <div className="flex flex-wrap gap-1.5 mt-2 px-1">
+              {customCats.map(c => (
+                <span key={c.id} className="inline-flex items-center gap-1 bg-gray-50 text-xs text-gray-600
+                                            rounded-full px-2.5 py-1 border border-gray-100">
+                  <span>{c.emoji}</span>
+                  <span>{c.name}</span>
+                  <button
+                    onClick={() => deleteCustomCategory(`custom_${c.id}`)}
+                    className="text-gray-300 hover:text-red-400 transition-colors mr-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

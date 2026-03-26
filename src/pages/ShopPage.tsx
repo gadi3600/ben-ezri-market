@@ -9,8 +9,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { ShoppingList, ListItem, Store } from '../lib/types'
 import { canEdit } from '../lib/permissions'
-import { classifyItem, CATEGORY_ORDER, CAT, OTHER } from '../lib/categories'
-import type { Category } from '../lib/categories'
+import { classifyItem, buildAllCategories } from '../lib/categories'
+import type { Category, CustomCategoryRow } from '../lib/categories'
 import ReceiptModal from '../components/ReceiptModal'
 import ImageLightbox from '../components/ImageLightbox'
 
@@ -233,11 +233,6 @@ function ItemDetailModal({
 
 // ── ActiveItem ────────────────────────────────────────────────────────────────
 
-// All categories for the picker
-const ALL_CATEGORIES = CATEGORY_ORDER.map(id => {
-  const allCats: Record<string, Category> = { ...CAT, other: OTHER }
-  return allCats[id]
-}).filter(Boolean) as Category[]
 
 const ActiveItem = memo(function ActiveItem({
   item,
@@ -252,6 +247,7 @@ const ActiveItem = memo(function ActiveItem({
   onMoveDown,
   onMoveTo,
   onChangeCategory,
+  categories,
 }: {
   item: ListItemWithUser
   itemCategory: Category
@@ -265,6 +261,7 @@ const ActiveItem = memo(function ActiveItem({
   onMoveDown: () => void
   onMoveTo: (targetIdx: number) => void
   onChangeCategory: (catId: string) => void
+  categories: Category[]
 }) {
   const hasExtra = !!(item.note || item.image_url)
   const [editingPos, setEditingPos] = useState(false)
@@ -339,7 +336,7 @@ const ActiveItem = memo(function ActiveItem({
             <div className="fixed inset-0 z-30" onClick={() => setShowCatPicker(false)} />
             <div className="absolute top-8 right-0 z-40 bg-white rounded-2xl shadow-xl border border-gray-100
                             overflow-hidden w-44 max-h-64 overflow-y-auto">
-              {ALL_CATEGORIES.map(cat => (
+              {categories.map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => { onChangeCategory(cat.id); setShowCatPicker(false) }}
@@ -495,9 +492,9 @@ export default function ShopPage() {
     setLoading(true)
     console.time('⏱ ShopPage total')
 
-    // Run ALL queries in parallel (stores + list + order data)
-    console.time('⏱ batch1: stores+list+order')
-    const [storeRes, listRes, orderRes] = await Promise.all([
+    // Run ALL queries in parallel (stores + list + order data + custom categories)
+    console.time('⏱ batch1: stores+list+order+customCats')
+    const [storeRes, listRes, orderRes, customCatRes] = await Promise.all([
       supabase.from('stores').select('*').eq('is_active', true).eq('family_id', profile!.family_id).order('name'),
       supabase
         .from('shopping_lists').select('*')
@@ -511,8 +508,13 @@ export default function ShopPage() {
         .select('type, order_data')
         .eq('family_id', profile!.family_id)
         .in('type', ['customOrder', 'catOrder']),
+      supabase
+        .from('custom_categories')
+        .select('id, family_id, name, emoji, created_by')
+        .eq('family_id', profile!.family_id)
+        .order('created_at'),
     ])
-    console.timeEnd('⏱ batch1: stores+list+order')
+    console.timeEnd('⏱ batch1: stores+list+order+customCats')
 
     const storeData = storeRes.data
     const listData = listRes.data
@@ -522,6 +524,7 @@ export default function ShopPage() {
     if (orderRes.error) console.error('⏱ order error:', orderRes.error.message)
 
     if (storeData) setStores(storeData)
+    if (customCatRes.data) setCustomCats(customCatRes.data)
 
     // Apply order data
     for (const row of orderData ?? []) {
@@ -757,6 +760,10 @@ export default function ShopPage() {
   // ── saved categories from DB (name → category) ──
   const [savedCats, setSavedCats] = useState<Record<string, string>>({})
 
+  // ── custom categories ──
+  const [customCats, setCustomCats] = useState<CustomCategoryRow[]>([])
+  const { allCats: allCatsMap, allList: allCatsList, order: dynamicCatOrder } = buildAllCategories(customCats)
+
   // ── custom sort order + category overrides (synced to DB) ──
   // Loaded in loadAll(), not separate useEffects
   const [customOrder, setCustomOrder] = useState<string[]>([])
@@ -806,21 +813,19 @@ export default function ShopPage() {
 
   // Get effective category: DB saved (by name) → auto-classify
   function getItemCategory(item: ListItemWithUser): Category {
-    const allCats: Record<string, Category> = { ...CAT, other: OTHER }
     const savedId = savedCats[item.name]
-    if (savedId && allCats[savedId]) return allCats[savedId]
-    // 3. Auto-classify by name
+    if (savedId && allCatsMap[savedId]) return allCatsMap[savedId]
     return classifyItem(item.name)
   }
 
   // Default category-sorted flat list
   const defaultSorted = useMemo(() => {
     return [...active].sort((a, b) => {
-      const catA = CATEGORY_ORDER.indexOf(getItemCategory(a).id)
-      const catB = CATEGORY_ORDER.indexOf(getItemCategory(b).id)
+      const catA = dynamicCatOrder.indexOf(getItemCategory(a).id)
+      const catB = dynamicCatOrder.indexOf(getItemCategory(b).id)
       return catA - catB
     })
-  }, [active, savedCats]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, savedCats, customCats]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Flat sorted list
   const flatActive = useMemo(() => {
@@ -1187,6 +1192,7 @@ export default function ShopPage() {
                     onMoveDown={() => moveItem(item.id, 'down')}
                     onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
                     onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
+                    categories={allCatsList}
                   />
                 )
               })}
@@ -1250,6 +1256,7 @@ export default function ShopPage() {
                             onMoveDown={() => moveItem(item.id, 'down')}
                             onMoveTo={(targetIdx) => moveItemTo(item.id, targetIdx)}
                             onChangeCategory={(catId) => changeItemCategory(item.id, catId)}
+                            categories={allCatsList}
                           />
                         )
                       })}
