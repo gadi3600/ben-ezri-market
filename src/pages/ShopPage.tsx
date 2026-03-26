@@ -911,7 +911,9 @@ export default function ShopPage() {
       category:   newCatId,
       family_id:  profile.family_id,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'name,family_id' })
+    }, { onConflict: 'name,family_id' }).then(({ error }) => {
+      if (error) console.error('🏷️ ShopPage save FAILED:', error.message, error.code)
+    })
   }
 
   // ── search ──
