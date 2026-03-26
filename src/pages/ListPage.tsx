@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Minus, Trash2, ShoppingBag, CheckCircle2, Camera,
-  X, MessageSquare, ClipboardList,
+  X, MessageSquare, ClipboardList, Share2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -689,6 +689,13 @@ export default function ListPage() {
     await supabase.from('list_items').delete().in('id', ids)
   }
 
+  function shareToWhatsApp() {
+    if (items.length === 0) return
+    const lines = items.map(it => `- ${it.quantity} ${it.name}`)
+    const text = `רשימת קניות 🛒\n${lines.join('\n')}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
   const itemCount = items.length
 
   // ── Loading ──
@@ -791,14 +798,26 @@ export default function ListPage() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => navigate('/list-history')}
-          className="mt-3 flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700
-                     font-medium transition-colors"
-        >
-          <ClipboardList className="w-3.5 h-3.5" />
-          היסטוריית רשימות
-        </button>
+        <div className="mt-3 flex items-center gap-4">
+          <button
+            onClick={() => navigate('/list-history')}
+            className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700
+                       font-medium transition-colors"
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            היסטוריית רשימות
+          </button>
+          {itemCount > 0 && (
+            <button
+              onClick={shareToWhatsApp}
+              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-700
+                         font-medium transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              שתף בוואטסאפ
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Empty state */}
