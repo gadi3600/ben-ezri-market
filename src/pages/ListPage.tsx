@@ -498,12 +498,38 @@ export default function ListPage() {
   const [showImageMenu, setShowImageMenu] = useState(false)
   const [showPushBanner, setShowPushBanner] = useState(false)
 
-  // Derive filtered suggestions from what user typed (max 5, case-insensitive)
-  const suggestions = newName.trim().length > 0
-    ? allSuggestions
-        .filter(s => s.toLowerCase().includes(newName.toLowerCase()))
-        .slice(0, 5)
-    : []
+  // Product catalog suggestions
+  const [catalogSuggestions, setCatalogSuggestions] = useState<string[]>([])
+  const catalogTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  function handleNameChange(val: string) {
+    setNewName(val)
+    setDupError(null)
+    // Debounced catalog search
+    if (catalogTimerRef.current) clearTimeout(catalogTimerRef.current)
+    const q = val.trim()
+    if (q.length < 2) { setCatalogSuggestions([]); return }
+    catalogTimerRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('product_catalog')
+        .select('name')
+        .ilike('name', `%${q}%`)
+        .limit(8)
+      if (data) setCatalogSuggestions(data.map(r => r.name))
+      else setCatalogSuggestions([])
+    }, 300)
+  }
+
+  // Merge purchase history + catalog suggestions, deduplicated
+  const suggestions = (() => {
+    const q = newName.trim()
+    if (q.length === 0) return []
+    const historyMatches = allSuggestions
+      .filter(s => s.toLowerCase().includes(q.toLowerCase()))
+    const seen = new Set(historyMatches.map(s => s.toLowerCase()))
+    const catalogNew = catalogSuggestions.filter(s => !seen.has(s.toLowerCase()))
+    return [...historyMatches, ...catalogNew].slice(0, 8)
+  })()
 
   function getItemCategory(item: ListItemWithUser): Category {
     const savedId = savedCats[item.name]
@@ -1127,7 +1153,7 @@ export default function ListPage() {
               ref={inputRef}
               type="text"
               value={newName}
-              onChange={e => { setNewName(e.target.value); setDupError(null) }}
+              onChange={e => handleNameChange(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addItem()}
               className="input flex-1"
               placeholder="הוסף מוצר..."
