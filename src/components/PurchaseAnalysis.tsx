@@ -133,6 +133,12 @@ function fmt(n: number | null | undefined) {
   return `₪${Number(n).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
+// Weight-based items have decimal quantities (e.g. 2.1456 kg) — count as 1 unit
+function unitQty(q: number): number {
+  const n = Number(q)
+  return Number.isInteger(n) ? n : 1
+}
+
 function fmtQty(q: number, unit: string) {
   const n = Number(q)
   return unit === 'יחידה' ? String(n) : `${n} ${unit}`
@@ -252,7 +258,7 @@ export default function PurchaseAnalysis({
 
   // ── stats ───────────────────────────────────────────────────────────────────
 
-  const totalQty     = items.reduce((s, i) => s + Number(i.quantity), 0)
+  const totalQty     = items.reduce((s, i) => s + unitQty(i.quantity), 0)
   const calcTotal    = items.reduce((s, i) => s + Number(i.total_price ?? 0), 0)
   const displayTotal = totalAmount ?? (calcTotal > 0 ? calcTotal : null)
   const avgPerItem   = items.length > 0 && displayTotal ? displayTotal / items.length : null
