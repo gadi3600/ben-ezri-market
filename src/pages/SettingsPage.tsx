@@ -3,11 +3,14 @@ import type { ReactNode } from 'react'
 import {
   User, Users, Copy, Check, LogOut, Store as StoreIcon, Crown,
   Plus, Trash2, Loader2, Pencil, X, CheckCircle2, Bell, Mail, KeyRound,
+  MoveUp, MoveDown, ChevronDown, ChevronLeft,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { registerPushSubscription } from '../lib/push'
 import { isAdmin, canEdit, roleLabel } from '../lib/permissions'
+import { buildAllCategories } from '../lib/categories'
+import type { CustomCategoryRow } from '../lib/categories'
 import type { Family, UserProfile, Store } from '../lib/types'
 import type { Role } from '../lib/permissions'
 
@@ -44,6 +47,12 @@ export default function SettingsPage() {
   // Inline edit store
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
   const [editStoreName, setEditStoreName]   = useState('')
+
+  // Store category order
+  const [customCats, setCustomCats] = useState<CustomCategoryRow[]>([])
+  const [catOrderStoreId, setCatOrderStoreId] = useState<string | null>(null)
+  const [storeCatOrder, setStoreCatOrder] = useState<string[]>([])
+  const [savingCatOrder, setSavingCatOrder] = useState(false)
 
   // Push notifications
   const [pushEnabled, setPushEnabled]     = useState(false)
@@ -92,6 +101,7 @@ export default function SettingsPage() {
       if (isAdmin(profile.role)) loadInvites(profile.family_id)
     }
     loadStores()
+    loadCustomCategories()
     checkPushStatus()
     if (profile.is_superadmin) {
       console.log('SettingsPage: loading superadmin data...')
@@ -602,6 +612,57 @@ export default function SettingsPage() {
     if (!error) setStores(prev => prev.filter(s => s.id !== id))
   }
 
+  // ── Store category order ──
+  async function loadCustomCategories() {
+    if (!profile?.family_id) return
+    const { data } = await supabase
+      .from('custom_categories')
+      .select('id, family_id, name, emoji, created_by')
+      .eq('family_id', profile.family_id)
+      .order('created_at')
+    if (data) setCustomCats(data)
+  }
+
+  async function openCatOrder(storeId: string) {
+    if (catOrderStoreId === storeId) { setCatOrderStoreId(null); return }
+    setCatOrderStoreId(storeId)
+    if (!profile?.family_id) return
+    const { data } = await supabase
+      .from('store_category_order')
+      .select('category_order')
+      .eq('store_id', storeId)
+      .eq('family_id', profile.family_id)
+      .maybeSingle()
+    if (data?.category_order && Array.isArray(data.category_order)) {
+      setStoreCatOrder(data.category_order as string[])
+    } else {
+      // Default: all categories in standard order
+      const { order } = buildAllCategories(customCats)
+      setStoreCatOrder(order)
+    }
+  }
+
+  function moveCatInStore(idx: number, direction: 'up' | 'down') {
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= storeCatOrder.length) return
+    const arr = [...storeCatOrder]
+    ;[arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]]
+    setStoreCatOrder(arr)
+  }
+
+  async function saveCatOrder() {
+    if (!profile?.family_id || !catOrderStoreId) return
+    setSavingCatOrder(true)
+    await supabase.from('store_category_order').upsert({
+      store_id: catOrderStoreId,
+      family_id: profile.family_id,
+      category_order: storeCatOrder,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'store_id,family_id' })
+    setSavingCatOrder(false)
+    setCatOrderStoreId(null)
+  }
+
   async function saveName() {
     if (!profile || savingName) return
     setSavingName(true)
@@ -914,58 +975,126 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-400 text-center py-3">אין חנויות מוגדרות עדיין</p>
         ) : (
           <div className="divide-y divide-gray-50 mt-3">
-            {stores.map(s => (
-              <div key={s.id} className="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
-                <div className="w-2 h-2 rounded-full bg-primary-400 flex-shrink-0" />
+            {stores.map(s => {
+              const { allCats: catMap } = buildAllCategories(customCats)
+              const isOpen = catOrderStoreId === s.id
+              return (
+                <div key={s.id}>
+                  <div className="flex items-center gap-2 py-2.5">
+                    <div className="w-2 h-2 rounded-full bg-primary-400 flex-shrink-0" />
 
-                {editingStoreId === s.id ? (
-                  /* ── Inline edit row ── */
-                  <>
-                    <input
-                      autoFocus
-                      value={editStoreName}
-                      onChange={e => setEditStoreName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter')  saveEditStore(s.id)
-                        if (e.key === 'Escape') setEditingStoreId(null)
-                      }}
-                      className="input flex-1 text-sm py-1.5"
-                    />
-                    <button
-                      onClick={() => saveEditStore(s.id)}
-                      className="p-2 rounded-lg text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
-                      title="שמור"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setEditingStoreId(null)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
-                      title="בטל"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  /* ── Normal row ── */
-                  <>
-                    <span className="flex-1 font-medium text-gray-700 text-sm">{s.name}</span>
-                    <button
-                      onClick={() => startEditStore(s.id, s.name)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteStore(s.id, s.name)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors flex-shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+                    {editingStoreId === s.id ? (
+                      /* ── Inline edit row ── */
+                      <>
+                        <input
+                          autoFocus
+                          value={editStoreName}
+                          onChange={e => setEditStoreName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter')  saveEditStore(s.id)
+                            if (e.key === 'Escape') setEditingStoreId(null)
+                          }}
+                          className="input flex-1 text-sm py-1.5"
+                        />
+                        <button
+                          onClick={() => saveEditStore(s.id)}
+                          className="p-2 rounded-lg text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
+                          title="שמור"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingStoreId(null)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                          title="בטל"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      /* ── Normal row ── */
+                      <>
+                        <span className="flex-1 font-medium text-gray-700 text-sm">{s.name}</span>
+                        <button
+                          onClick={() => openCatOrder(s.id)}
+                          className={`p-2 rounded-lg transition-colors flex-shrink-0
+                                     ${isOpen ? 'text-primary-600 bg-primary-50' : 'text-gray-400 hover:text-primary-500 hover:bg-primary-50'}`}
+                          title="סדר קטגוריות"
+                        >
+                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => startEditStore(s.id, s.name)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 active:bg-primary-100 transition-colors flex-shrink-0"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteStore(s.id, s.name)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors flex-shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* ── Category order editor ── */}
+                  {isOpen && (
+                    <div className="pb-3 pr-4 mr-1 border-r-2 border-primary-100">
+                      <p className="text-xs font-bold text-gray-500 mb-2">סדר קטגוריות בחנות</p>
+                      <div className="space-y-1">
+                        {storeCatOrder.map((catId, idx) => {
+                          const cat = catMap[catId]
+                          if (!cat) return null
+                          return (
+                            <div key={catId} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2.5 py-1.5">
+                              <div className="flex flex-col gap-0 flex-shrink-0">
+                                <button
+                                  onClick={() => moveCatInStore(idx, 'up')}
+                                  disabled={idx === 0}
+                                  className="w-5 h-4 flex items-center justify-center text-gray-300
+                                             hover:text-primary-600 disabled:opacity-20 transition-colors"
+                                >
+                                  <MoveUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => moveCatInStore(idx, 'down')}
+                                  disabled={idx === storeCatOrder.length - 1}
+                                  className="w-5 h-4 flex items-center justify-center text-gray-300
+                                             hover:text-primary-600 disabled:opacity-20 transition-colors"
+                                >
+                                  <MoveDown className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <span className="text-sm">{cat.emoji}</span>
+                              <span className="text-xs font-medium text-gray-600 flex-1">{cat.label}</span>
+                              <span className="text-[10px] text-gray-300">{idx + 1}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-2 mt-2.5">
+                        <button
+                          onClick={saveCatOrder}
+                          disabled={savingCatOrder}
+                          className="text-xs font-bold text-white bg-primary-500 hover:bg-primary-600
+                                     disabled:opacity-50 px-4 py-1.5 rounded-xl transition-colors"
+                        >
+                          {savingCatOrder ? 'שומר...' : 'שמור סדר'}
+                        </button>
+                        <button
+                          onClick={() => setCatOrderStoreId(null)}
+                          className="text-xs text-gray-400 hover:text-gray-600 px-3 py-1.5 transition-colors"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </Section>

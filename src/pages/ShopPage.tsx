@@ -681,6 +681,9 @@ export default function ShopPage() {
         const found = storeData?.find(s => s.id === listData.store_id)
         if (found) setSelectedStore(found)
         setShowPicker(false)
+        // Load store's category order (only if no catOrder already loaded from shopping_order)
+        const hasCatOrder = (orderData ?? []).some(r => r.type === 'catOrder' && Array.isArray(r.order_data) && r.order_data.length > 0)
+        if (!hasCatOrder) loadStoreCatOrder(listData.store_id)
       } else {
         const currentDone = localStorage.getItem('shopDoneState')
         if (!currentDone || currentDone === 'idle') {
@@ -694,12 +697,28 @@ export default function ShopPage() {
   }
 
   // ── store selection ──
+  async function loadStoreCatOrder(storeId: string) {
+    if (!profile?.family_id) return
+    const { data } = await supabase
+      .from('store_category_order')
+      .select('category_order')
+      .eq('store_id', storeId)
+      .eq('family_id', profile.family_id)
+      .maybeSingle()
+    if (data?.category_order && Array.isArray(data.category_order)) {
+      setCatOrder(data.category_order as string[])
+      saveOrderToDB('catOrder', data.category_order)
+    }
+  }
+
   async function handleSelectStore(store: Store) {
     setSelectedStore(store)
     setShowPicker(false)
     if (list && store.id) {
       await supabase.from('shopping_lists').update({ store_id: store.id }).eq('id', list.id)
     }
+    // Apply store's category order
+    if (store.id) loadStoreCatOrder(store.id)
   }
 
   // ── item actions ──
