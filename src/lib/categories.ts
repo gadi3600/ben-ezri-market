@@ -10,11 +10,14 @@ export const CAT: Record<string, Category> = {
   dairy:      { id: 'dairy',      label: 'מקרר, חלב וביצים',  emoji: '🥛', color: '#3b82f6' },
   meat:       { id: 'meat',       label: 'בשר ודגים',         emoji: '🥩', color: '#ef4444' },
   dry:        { id: 'dry',        label: 'מזווה ויבש',         emoji: '🌾', color: '#f59e0b' },
+  bakery:     { id: 'bakery',     label: 'לחם ומאפים',        emoji: '🍞', color: '#a16207' },
   frozen:     { id: 'frozen',     label: 'קפוא ומוכן',        emoji: '🧊', color: '#67e8f9' },
   drinks:     { id: 'drinks',     label: 'שתייה',             emoji: '🥤', color: '#8b5cf6' },
   snacks:     { id: 'snacks',     label: 'חטיפים וממתקים',    emoji: '🍿', color: '#ec4899' },
   cleaning:   { id: 'cleaning',   label: 'ניקוי וטואלטיקה',   emoji: '🧹', color: '#06b6d4' },
   disposable: { id: 'disposable', label: 'חד פעמי',           emoji: '🥡', color: '#f97316' },
+  baby:       { id: 'baby',       label: 'תינוקות ופעוטות',   emoji: '👶', color: '#f472b6' },
+  health:     { id: 'health',     label: 'בריאות וויטמינים',  emoji: '💊', color: '#10b981' },
 }
 
 export const OTHER: Category = { id: 'other', label: 'אחר', emoji: '📦', color: '#94a3b8' }
@@ -26,14 +29,17 @@ const RULES: Array<[Category, string[]]> = [
   [CAT.meat, ['עוף', 'בשר', 'דג', 'סלמון', 'טונה', 'נקניק', 'שניצל', 'המבורגר', 'פרגית', 'חזה', 'כבד', 'קציצ', 'פילה', 'שוק']],
   [CAT.produce, ['עגבניה', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז', 'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא', 'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון', 'פטריות', 'כוסברה', 'פטרוז', 'קולורבי', 'גמבה', 'ארטישוק']],
   [CAT.drinks, ['מים', 'מיץ', 'קולה', 'ספרייט', 'פאנטה', 'בירה', 'יין', 'סודה', 'לימונדה', 'נקטר', 'משקה', 'רד בול']],
-  [CAT.dry, ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'לחם', 'פיתה', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'שימורי', 'עדשים', 'שעועית', 'חומוס', 'פתיתים', 'קורנפלקס', 'תירס', 'מרק']],
+  [CAT.bakery, ['לחם', 'פיתה', 'לחמניה', 'חלה', 'באגט', 'מאפה', 'בורקס', 'קרואסון', 'עוגה', 'טורט', 'מאפין', 'רוגלך', 'סמבוסק', 'ג׳חנון', 'מלאווח', 'לאפה']],
+  [CAT.dry, ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'שימורי', 'עדשים', 'שעועית', 'חומוס', 'פתיתים', 'קורנפלקס', 'תירס', 'מרק']],
   [CAT.frozen, ['גלידה', 'קפוא']],
   [CAT.snacks, ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'דניאלה']],
+  [CAT.baby, ['חיתול', 'טיטול', 'מגבון תינוק', 'מוצץ', 'בקבוק תינוק', 'מזון תינוק', 'סימילאק', 'מטרנה', 'מגבוני']],
+  [CAT.health, ['ויטמין', 'תוסף', 'אומגה', 'פרוביוטיקה', 'אספירין', 'אקמול', 'נורופן', 'תרופה', 'פלסטר', 'חיטוי', 'מסכה', 'כפפות']],
 ]
 
 // Category order for display (produce first = start of store)
 export const CATEGORY_ORDER = [
-  'produce', 'dairy', 'meat', 'dry', 'frozen', 'drinks', 'snacks', 'cleaning', 'disposable', 'other',
+  'produce', 'dairy', 'meat', 'dry', 'bakery', 'frozen', 'drinks', 'snacks', 'cleaning', 'disposable', 'baby', 'health', 'other',
 ]
 
 // Custom category DB row
