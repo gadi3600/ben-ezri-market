@@ -498,9 +498,11 @@ export default function ListPage() {
   const [showImageMenu, setShowImageMenu] = useState(false)
   const [showPushBanner, setShowPushBanner] = useState(false)
 
-  // Product catalog suggestions
-  const [catalogSuggestions, setCatalogSuggestions] = useState<string[]>([])
+  // Product catalog suggestions (name + category)
+  const [catalogResults, setCatalogResults] = useState<{ name: string; category: string | null }[]>([])
   const catalogTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  // Lookup: product name → catalog category
+  const catalogCatMap = useRef<Record<string, string>>({})
 
   function handleNameChange(val: string) {
     setNewName(val)
@@ -508,16 +510,39 @@ export default function ListPage() {
     // Debounced catalog search
     if (catalogTimerRef.current) clearTimeout(catalogTimerRef.current)
     const q = val.trim()
-    if (q.length < 2) { setCatalogSuggestions([]); return }
+    if (q.length < 2) { setCatalogResults([]); return }
     catalogTimerRef.current = setTimeout(async () => {
       const { data } = await supabase
         .from('product_catalog')
-        .select('name')
+        .select('name, category')
         .ilike('name', `%${q}%`)
         .limit(8)
-      if (data) setCatalogSuggestions(data.map(r => r.name))
-      else setCatalogSuggestions([])
+      if (data) {
+        setCatalogResults(data)
+        // Build lookup map
+        const map: Record<string, string> = {}
+        for (const r of data) { if (r.category) map[r.name.toLowerCase()] = r.category }
+        catalogCatMap.current = map
+      } else {
+        setCatalogResults([])
+      }
     }, 300)
+  }
+
+  function selectSuggestion(name: string) {
+    setNewName(name)
+    inputRef.current?.focus()
+    // If this product has a catalog category, pre-save it
+    const catId = catalogCatMap.current[name.toLowerCase()]
+    if (catId && profile?.family_id) {
+      setSavedCats(prev => ({ ...prev, [name]: catId }))
+      supabase.from('item_categories').upsert({
+        name,
+        category: catId,
+        family_id: profile.family_id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'name,family_id' })
+    }
   }
 
   // Merge purchase history + catalog suggestions, deduplicated
@@ -527,7 +552,7 @@ export default function ListPage() {
     const historyMatches = allSuggestions
       .filter(s => s.toLowerCase().includes(q.toLowerCase()))
     const seen = new Set(historyMatches.map(s => s.toLowerCase()))
-    const catalogNew = catalogSuggestions.filter(s => !seen.has(s.toLowerCase()))
+    const catalogNew = catalogResults.map(r => r.name).filter(s => !seen.has(s.toLowerCase()))
     return [...historyMatches, ...catalogNew].slice(0, 8)
   })()
 
@@ -1073,10 +1098,7 @@ export default function ListPage() {
               <button
                 key={s}
                 onMouseDown={e => e.preventDefault()}
-                onClick={() => {
-                  setNewName(s)
-                  inputRef.current?.focus()
-                }}
+                onClick={() => selectSuggestion(s)}
                 className="w-full text-right px-4 py-3 text-sm text-gray-700 font-medium
                            hover:bg-primary-50 active:bg-primary-100 transition-colors
                            border-b border-gray-50 last:border-0"
