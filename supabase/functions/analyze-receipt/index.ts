@@ -107,15 +107,24 @@ serve(async (req) => {
               ...imageContent,
               {
                 type: "text",
-                text: `Analyze this receipt image. Return ONLY valid JSON, no markdown, no backticks, no explanations, no text before or after the JSON object.
+                text: `Analyze this Israeli grocery receipt image. Return ONLY valid JSON, no markdown, no backticks, no explanations, no text before or after the JSON object.
 Schema:
-{"total": <number|null>, "store": "<store name|null>", "date": "<DD/MM/YYYY|null>", "items": [{"name": "<product name>", "quantity": <number>, "unit": "<unit>", "price_per_unit": <number|null>, "total_price": <number|null>}]}
+{"total": <number|null>, "store": "<store name|null>", "date": "<DD/MM/YYYY|null>", "items": [{"name": "<product name>", "quantity": <number>, "unit": "<unit>", "price_per_unit": <number|null>, "total_price": <number|null>, "category": "<category>"}]}
 Rules:
 - Output must be a single complete JSON object. Do NOT truncate the items array.
 - Use standard ASCII double-quotes only. Never use " as part of a Hebrew word inside a string.
 - For units use only: יחידה, קג, ליטר, מל, גרם, יח (no abbreviations with quotes).
 - Product names in Hebrew as they appear on the receipt.
-- If no items are clearly visible, use "items": [].`,
+- If no items are clearly visible, use "items": [].
+- For category, use one of: produce, dairy, meat, dry, bakery, frozen, drinks, snacks, cleaning, disposable, baby, health, other.
+- Hebrew food context is important for correct classification:
+  - "שוקולד פרה" is snacks (chocolate brand), NOT meat
+  - "חלב" prefix means dairy even if followed by other words
+  - "עוגת תפוחים" is bakery, NOT produce
+  - "מיץ תפוזים" is drinks, NOT produce
+  - "ריבת תות" is dry goods, NOT produce
+  - "גלידת וניל" is frozen, NOT other
+  - Weight-based items (kg) with decimal quantities are single units sold by weight.`,
               },
             ],
           },

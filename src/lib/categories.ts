@@ -22,19 +22,40 @@ export const CAT: Record<string, Category> = {
 
 export const OTHER: Category = { id: 'other', label: 'אחר', emoji: '📦', color: '#94a3b8' }
 
+// ── Priority prefix rules — first word determines category regardless of rest ──
+const PREFIX_RULES: Array<[string[], Category]> = [
+  [['שוקולד', 'שוקו'],                            CAT.snacks],
+  [['גבינת', 'גבינה'],                            CAT.dairy],
+  [['עוגת', 'עוגה', 'עוגיות'],                    CAT.bakery],
+  [['מיץ', 'משקה'],                                CAT.drinks],
+  [['קרם שוקולד', 'קרם עוגה', 'קרם וניל'],       CAT.snacks],
+  [['קרם לחות', 'קרם גוף', 'קרם ידיים', 'קרם פנים', 'קרם הגנה'], CAT.cleaning],
+  [['חיתול', 'טיטול'],                             CAT.baby],
+  [['ויטמין'],                                     CAT.health],
+]
+
+// ── Exclusion rules — if item contains an exclusion word, skip that category ──
+// Key: category id → words that cancel a match for that category
+const EXCLUSIONS: Record<string, string[]> = {
+  meat:    ['שוקולד', 'קפה', 'גבינה', 'גבינת', 'חלב', 'עוגה', 'עוגת', 'קרם', 'ריבה', 'ממרח', 'טחינה', 'חמאת'],
+  produce: ['עוגת', 'עוגה', 'ריבת', 'מיץ', 'משקה', 'טעם', 'בטעם', 'שוקולד', 'גלידת', 'גלידה', 'מרק'],
+  dairy:   ['שוקולד מריר', 'קוקוס'],
+}
+
+// ── Keyword rules — ordered by priority ──
 const RULES: Array<[Category, string[]]> = [
   [CAT.disposable, ['כוסות', 'צלחות', 'קערות', 'סכו', 'מגש', 'שקית', 'ניילון', 'אלומיניום', 'רדיד', 'מפיות', 'מפית']],
-  [CAT.cleaning, ['שמפו', 'סבון', 'קרם', 'דאודורנט', 'ניקוי', 'אבקת', 'נוזל כלים', 'נוזל לכלים', 'נייר טואלט', 'מגבון', 'טמפון', 'פד', 'גליל', 'מרכך']],
-  [CAT.dairy, ['חלב', 'גבינה', 'יוגורט', 'ביצ', 'קוטג', 'שמנת', 'חמאה', 'לבן', 'מחלבות', 'תחליב']],
-  [CAT.meat, ['עוף', 'בשר', 'דג', 'סלמון', 'טונה', 'נקניק', 'שניצל', 'המבורגר', 'פרגית', 'חזה', 'כבד', 'קציצ', 'פילה', 'שוק']],
-  [CAT.produce, ['עגבניה', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז', 'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא', 'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון', 'פטריות', 'כוסברה', 'פטרוז', 'קולורבי', 'גמבה', 'ארטישוק']],
-  [CAT.drinks, ['מים', 'מיץ', 'קולה', 'ספרייט', 'פאנטה', 'בירה', 'יין', 'סודה', 'לימונדה', 'נקטר', 'משקה', 'רד בול']],
-  [CAT.bakery, ['לחם', 'פיתה', 'לחמניה', 'חלה', 'באגט', 'מאפה', 'בורקס', 'קרואסון', 'עוגה', 'טורט', 'מאפין', 'רוגלך', 'סמבוסק', 'ג׳חנון', 'מלאווח', 'לאפה']],
-  [CAT.dry, ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'שימורי', 'עדשים', 'שעועית', 'חומוס', 'פתיתים', 'קורנפלקס', 'תירס', 'מרק']],
-  [CAT.frozen, ['גלידה', 'קפוא']],
-  [CAT.snacks, ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'דניאלה']],
-  [CAT.baby, ['חיתול', 'טיטול', 'מגבון תינוק', 'מוצץ', 'בקבוק תינוק', 'מזון תינוק', 'סימילאק', 'מטרנה', 'מגבוני']],
-  [CAT.health, ['ויטמין', 'תוסף', 'אומגה', 'פרוביוטיקה', 'אספירין', 'אקמול', 'נורופן', 'תרופה', 'פלסטר', 'חיטוי', 'מסכה', 'כפפות']],
+  [CAT.baby, ['חיתול', 'טיטול', 'מגבון תינוק', 'מגבוני תינוק', 'מוצץ', 'בקבוק תינוק', 'מזון תינוק', 'סימילאק', 'מטרנה', 'מגבוני']],
+  [CAT.health, ['ויטמין', 'תוסף תזונה', 'תוסף', 'אומגה', 'פרוביוטיקה', 'אספירין', 'אקמול', 'נורופן', 'תרופה', 'פלסטר', 'חיטוי', 'מסכה רפואית', 'כפפות']],
+  [CAT.cleaning, ['שמפו', 'סבון', 'דאודורנט', 'ניקוי', 'אבקת כביסה', 'אבקת', 'נוזל כלים', 'נוזל לכלים', 'נייר טואלט', 'מגבון', 'טמפון', 'פד', 'גליל נייר', 'גליל', 'מרכך כביסה', 'מרכך', 'אקונומיקה', 'קרם לחות', 'קרם גוף', 'קרם ידיים', 'קרם פנים', 'קרם הגנה']],
+  [CAT.dairy, ['חלב', 'גבינה', 'גבינת', 'יוגורט', 'ביצ', 'קוטג', 'שמנת', 'חמאה', 'לבן', 'מחלבות', 'תחליב', 'שוקו חלב', 'קוטג׳', 'קשקבל', 'מוצרלה', 'צפתית', 'עמק']],
+  [CAT.meat, ['עוף', 'בשר', 'דג ', 'דגים', 'סלמון', 'טונה', 'נקניק', 'שניצל', 'המבורגר', 'פרגית', 'חזה עוף', 'חזה', 'כבד', 'קציצ', 'פילה', 'שוק עוף', 'כנפיים', 'אנטריקוט', 'סטייק', 'טחון', 'כרעיים', 'צלי']],
+  [CAT.produce, ['עגבניה', 'עגבניות', 'מלפפון', 'חסה', 'גזר', 'בצל', 'תפוח', 'תפוז', 'בננה', 'אבוקדו', 'לימון', 'פלפל', 'ברוקולי', 'כרובית', 'קישוא', 'חציל', 'תרד', 'שום', 'מנגו', 'תות', 'ענב', 'אבטיח', 'מלון', 'פטריות', 'כוסברה', 'פטרוזיליה', 'פטרוז', 'קולורבי', 'גמבה', 'ארטישוק', 'כרוב', 'סלרי', 'שמיר', 'נענע', 'רוקט', 'אפרסק', 'שזיף', 'אגס', 'קלמנטינה', 'פומלה', 'רימון']],
+  [CAT.drinks, ['מים מינרל', 'מים', 'מיץ', 'קולה', 'ספרייט', 'פאנטה', 'בירה', 'יין', 'סודה', 'לימונדה', 'נקטר', 'משקה', 'רד בול', 'פיוז טי', 'אייס טי']],
+  [CAT.bakery, ['לחם', 'פיתה', 'לחמניה', 'לחמניות', 'חלה', 'באגט', 'מאפה', 'בורקס', 'קרואסון', 'עוגה', 'עוגת', 'טורט', 'מאפין', 'רוגלך', 'סמבוסק', 'ג׳חנון', 'מלאווח', 'לאפה', 'פוקצ׳ה', 'סופגניה', 'דונאט']],
+  [CAT.dry, ['אורז', 'פסטה', 'קמח', 'סוכר', 'שמן', 'מלח', 'קפה', 'תה', 'טחינה', 'חלווה', 'ריבה', 'שימורי', 'עדשים', 'שעועית', 'חומוס', 'פתיתים', 'קורנפלקס', 'תירס', 'מרק', 'שקדי מרק', 'אטריות', 'קוסקוס', 'בולגור', 'קינואה', 'דבש', 'סילאן']],
+  [CAT.frozen, ['גלידה', 'גלידת', 'קפוא']],
+  [CAT.snacks, ['במבה', 'ביסלי', 'שוקולד', 'סוכריות', 'עוגיות', 'חטיף', 'פופקורן', 'דניאלה', 'קרקר', 'וופל', 'אגוזים', 'שקדים', 'בוטנים', 'גרעינים', 'חלבה', 'אוראו']],
 ]
 
 // Category order for display (produce first = start of store)
@@ -111,19 +132,44 @@ export async function suggestEmoji(name: string): Promise<string> {
 
 export function classifyItem(name: string): Category {
   const lower = name.trim().toLowerCase()
+
+  // 1. Special cases
   if (/^פיקדון$/.test(lower)) return OTHER
   if (lower.includes('פיקדון')) return CAT.drinks
   if (lower.includes('חד פעמי')) return CAT.disposable
 
-  for (const [cat, keywords] of RULES) {
-    for (const kw of keywords) {
-      if (lower.startsWith(kw)) return cat
+  // 2. Priority prefix rules — first phrase determines category
+  for (const [prefixes, cat] of PREFIX_RULES) {
+    for (const p of prefixes) {
+      if (lower.startsWith(p)) return cat
     }
   }
+
+  // 3. Full-phrase prefix match (longer phrases first for precision)
   for (const [cat, keywords] of RULES) {
-    for (const kw of keywords) {
-      if (lower.includes(kw)) return cat
+    // Sort keywords by length descending so "חזה עוף" matches before "חזה"
+    const sorted = [...keywords].sort((a, b) => b.length - a.length)
+    for (const kw of sorted) {
+      if (lower.startsWith(kw)) {
+        // Check exclusions
+        const excl = EXCLUSIONS[cat.id]
+        if (excl && excl.some(e => lower.includes(e) && e !== kw)) continue
+        return cat
+      }
     }
   }
+
+  // 4. Substring match with exclusion checking
+  for (const [cat, keywords] of RULES) {
+    const sorted = [...keywords].sort((a, b) => b.length - a.length)
+    for (const kw of sorted) {
+      if (lower.includes(kw)) {
+        const excl = EXCLUSIONS[cat.id]
+        if (excl && excl.some(e => lower.includes(e) && e !== kw)) continue
+        return cat
+      }
+    }
+  }
+
   return OTHER
 }
